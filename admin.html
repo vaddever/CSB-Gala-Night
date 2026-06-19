@@ -105,6 +105,7 @@
     <button class="btn tab-btn" data-tab="draw">Lucky Draw</button>
     <button class="btn tab-btn" data-tab="karaoke">Karaoke</button>
     <button class="btn tab-btn" data-tab="quiz">Quiz</button>
+    <button class="btn tab-btn" data-tab="awards">Awards 🏆</button>
   </div>
 
   <div class="wrap">
@@ -257,6 +258,46 @@
       </div>
     </div>
 
+    <!-- ===================== AWARDS ===================== -->
+    <div class="panel" id="panel-awards">
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="card">
+          <div class="eyebrow">Pull from voting portal</div>
+          <label for="gasUrl">Voting portal GAS URL</label>
+          <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/…/exec" />
+          <label for="gasYear" style="margin-top:12px;">Filter by year (optional)</label>
+          <input type="text" id="gasYear" placeholder="e.g. 2026" style="max-width:140px;" />
+          <button class="btn btn-gold btn-block" id="fetchWinnersBtn" style="margin-top:16px;">Fetch winners from portal</button>
+          <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:10px; min-height:1em;"></p>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Live controls</div>
+          <div class="big-status" id="awardsStatus"><div class="display muted">Idle</div></div>
+          <p class="muted" id="awardsProgress" style="font-size:13px; margin-top:6px;"></p>
+          <div class="row" style="margin-top:14px; flex-wrap:wrap; gap:8px;">
+            <button class="btn btn-gold" id="awardsCeremonyBtn">Start ceremony</button>
+            <button class="btn btn-gold" id="awardsRevealBtn">Reveal winner ✨</button>
+          </div>
+          <div class="row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">
+            <button class="btn btn-ghost" id="awardsNextBtn">Next award →</button>
+            <button class="btn btn-ghost" id="awardsFinishBtn">End ceremony 🏁</button>
+          </div>
+          <button class="btn btn-ghost btn-block" id="awardsResetBtn" style="margin-top:10px;">Reset to idle</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <div class="section-title">
+          <div class="eyebrow">Award categories preview</div>
+          <button class="btn btn-gold" id="pushToDisplayBtn" style="display:none;">Push to display screen</button>
+        </div>
+        <div id="awardsPreview"><p class="muted">Fetch winners above to preview categories.</p></div>
+      </div>
+
+    </div>
+
   </div>
 </div>
 
@@ -353,6 +394,7 @@ async function boot() {
   watchDraw();
   watchKaraoke();
   watchQuiz();
+  watchAwards();
 }
 
 /* ===================== ATTENDEES ===================== */
@@ -877,6 +919,140 @@ document.getElementById("resetQuizScoresBtn").addEventListener("click", async ()
   await setDoc(doc(db, "state", "quiz"), { status: "idle", currentQuestionId: null, batchNumber: 0 });
   toast("Quiz scores reset.");
 });
+
+/* ===================== AWARDS ===================== */
+let fetchedCategories = [];
+
+// Fetch winners from GAS voting portal
+document.getElementById("fetchWinnersBtn").addEventListener("click", async () => {
+  const gasUrl = document.getElementById("gasUrl").value.trim();
+  const gasYear = document.getElementById("gasYear").value.trim();
+  const statusEl = document.getElementById("fetchStatus");
+  if (!gasUrl) { statusEl.textContent = "Paste the voting portal GAS URL first."; return; }
+  statusEl.textContent = "Fetching…";
+  try {
+    const payload = { action: "getWinners" };
+    if (gasYear) payload.year = gasYear;
+    const url = gasUrl + "?data=" + encodeURIComponent(JSON.stringify(payload));
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status !== "ok") { statusEl.textContent = "Error: " + (data.message || "unknown"); return; }
+    fetchedCategories = data.categories || [];
+    if (fetchedCategories.length === 0) {
+      statusEl.textContent = "No categories found" + (gasYear ? ` for year ${gasYear}` : "") + ". Check the year filter or your Sheet.";
+      return;
+    }
+    statusEl.textContent = `✓ ${fetchedCategories.length} categor${fetchedCategories.length === 1 ? "y" : "ies"} loaded.`;
+    renderAwardsPreview(fetchedCategories);
+    document.getElementById("pushToDisplayBtn").style.display = "";
+  } catch (e) {
+    statusEl.textContent = "Fetch failed — check the URL and make sure the deployment has access: Anyone. (" + e.message + ")";
+  }
+});
+
+function renderAwardsPreview(categories) {
+  const wrap = document.getElementById("awardsPreview");
+  if (!categories || categories.length === 0) {
+    wrap.innerHTML = `<p class="muted">No categories to preview.</p>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>#</th><th>Award</th><th>Winner</th><th>Dept / Unit</th><th>Votes</th><th>Nominees</th></tr></thead>
+      <tbody>${categories.map((c, i) => {
+        const w = c.winner;
+        const dept = w ? [w.dept, w.unit].filter(Boolean).join(" · ") : "—";
+        return `<tr>
+          <td class="mono">${i + 1}</td>
+          <td>${escapeHtml(c.name)}</td>
+          <td style="color:var(--gold);">${w ? escapeHtml(w.name) : '<span class="muted">No votes yet</span>'}</td>
+          <td class="muted">${escapeHtml(dept)}</td>
+          <td class="mono">${w ? w.votes : 0} / ${c.totalVotes}</td>
+          <td class="muted">${c.nominees.map(n => escapeHtml(n.name)).join(", ")}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+}
+
+// Push fetched data into Firestore so the display screen can read it
+document.getElementById("pushToDisplayBtn").addEventListener("click", async () => {
+  if (fetchedCategories.length === 0) { toast("Fetch winners first."); return; }
+  await setDoc(doc(db, "state", "awards"), {
+    status: "idle",
+    currentIndex: 0,
+    categories: fetchedCategories
+  });
+  await setDisplayMode("awards");
+  toast(`${fetchedCategories.length} awards loaded into display screen.`);
+});
+
+// Live controls
+document.getElementById("awardsCeremonyBtn").addEventListener("click", async () => {
+  const snap = await getDoc(doc(db, "state", "awards"));
+  if (!snap.exists() || !(snap.data().categories || []).length) {
+    toast("Fetch and push winners first."); return;
+  }
+  await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: 0 });
+  await setDisplayMode("awards");
+  toast("Ceremony started — big screen showing first award.");
+});
+
+document.getElementById("awardsRevealBtn").addEventListener("click", async () => {
+  await updateDoc(doc(db, "state", "awards"), { status: "revealed" });
+});
+
+document.getElementById("awardsNextBtn").addEventListener("click", async () => {
+  const snap = await getDoc(doc(db, "state", "awards"));
+  if (!snap.exists()) return;
+  const d = snap.data();
+  const nextIndex = (d.currentIndex || 0) + 1;
+  if (nextIndex >= (d.categories || []).length) {
+    toast("That was the last award — use End ceremony to wrap up.");
+    return;
+  }
+  await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: nextIndex });
+});
+
+document.getElementById("awardsFinishBtn").addEventListener("click", async () => {
+  await updateDoc(doc(db, "state", "awards"), { status: "finished" });
+});
+
+document.getElementById("awardsResetBtn").addEventListener("click", async () => {
+  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categories: fetchedCategories });
+  await setDisplayMode("idle");
+});
+
+function watchAwards() {
+  onSnapshot(doc(db, "state", "awards"), snap => {
+    const el = document.getElementById("awardsStatus");
+    const prog = document.getElementById("awardsProgress");
+    if (!snap.exists()) { el.innerHTML = `<div class="display muted">Idle</div>`; prog.textContent = ""; return; }
+    const s = snap.data();
+    const cats = s.categories || [];
+    const idx = s.currentIndex || 0;
+    const cat = cats[idx];
+    if (s.status === "idle") {
+      el.innerHTML = `<div class="display muted">Idle</div>`;
+      prog.textContent = cats.length ? `${cats.length} awards loaded` : "";
+    } else if (s.status === "category") {
+      el.innerHTML = `<div class="display" style="color:var(--gold);">${escapeHtml(cat ? cat.name : "—")}</div><p class="muted" style="font-size:14px;">Showing category — press Reveal winner when ready</p>`;
+      prog.textContent = `Award ${idx + 1} of ${cats.length}`;
+    } else if (s.status === "revealed") {
+      const w = cat && cat.winner;
+      el.innerHTML = `<div class="display" style="color:var(--gold);">🏆 ${escapeHtml(w ? w.name : "—")}</div><p class="muted" style="font-size:13px;">${escapeHtml(cat ? cat.name : "")}</p>`;
+      prog.textContent = `Award ${idx + 1} of ${cats.length}`;
+    } else if (s.status === "finished") {
+      el.innerHTML = `<div class="display" style="color:var(--gold);">Ceremony complete 🏁</div>`;
+      prog.textContent = `All ${cats.length} awards announced`;
+    }
+    // Keep local preview in sync with what's in Firestore
+    if (cats.length && document.getElementById("awardsPreview").querySelector("table") === null) {
+      renderAwardsPreview(cats);
+      fetchedCategories = cats;
+      document.getElementById("pushToDisplayBtn").style.display = "";
+    }
+  });
+}
 </script>
 </body>
 </html>

@@ -57,6 +57,19 @@
   #scr-quiz .fastest { font-size: 2vw; color: var(--teal); margin-top: 1.4vw; }
 
   canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+  /* ---- awards ---- */
+  #scr-awards .eyebrow { font-size: 1.5vw; color: var(--gold); margin-bottom: 0.6vw; }
+  #scr-awards .award-category { font-size: 6vw; line-height: 1; }
+  #scr-awards .award-teaser { font-size: 2.2vw; color: var(--text-muted); margin-top: 2vw; animation: awardblink 1.6s ease-in-out infinite; }
+  #scr-awards .winner-name { font-size: 9vw; color: var(--gold); text-shadow: 0 0 60px rgba(232,184,75,0.55); line-height: 1; }
+  #scr-awards .winner-dept { font-size: 2vw; color: var(--text-muted); margin-top: 1vw; }
+  #scr-awards .winner-votes { font-family: var(--font-mono); font-size: 1.5vw; color: var(--gold-dim); margin-top: 1vw; }
+  @keyframes awardblink { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+  .awards-final-list { list-style:none; padding:0; margin: 2vw auto 0; max-width: 760px; width:100%; text-align:left; }
+  .awards-final-list li { display:flex; justify-content:space-between; align-items:baseline; padding: 0.8vw 0; border-bottom: 1px solid var(--border); }
+  .awards-final-list .acat { color: var(--text-muted); font-size: 1.6vw; }
+  .awards-final-list .awin { color: var(--gold); font-size: 2vw; }
 </style>
 </head>
 <body>
@@ -97,6 +110,16 @@
   <div class="options-grid" id="quizOptions"></div>
   <div class="fastest" id="quizFastest"></div>
   <ul class="leaderboard" id="quizLeaderboard"></ul>
+</div>
+
+<div class="screen" id="scr-awards">
+  <div class="eyebrow" id="awardsEyebrow">STAFF AWARDS</div>
+  <div class="award-category" id="awardCategory"></div>
+  <div class="award-teaser" id="awardTeaser">And the winner is…</div>
+  <div class="winner-name" id="awardWinnerName"></div>
+  <div class="winner-dept" id="awardWinnerDept"></div>
+  <div class="winner-votes" id="awardWinnerVotes"></div>
+  <ul class="awards-final-list" id="awardsFinalList"></ul>
 </div>
 
 <script type="module">
@@ -375,6 +398,75 @@ async function renderQuiz(s) {
   lastQuizStatus = s.status;
 }
 
+/* ===================== awards ===================== */
+let lastAwardsStatus = null;
+let lastAwardsIndex = -1;
+
+function renderAwards(s) {
+  showScreen("scr-awards");
+  const eyebrow    = document.getElementById("awardsEyebrow");
+  const categoryEl = document.getElementById("awardCategory");
+  const teaserEl   = document.getElementById("awardTeaser");
+  const winnerNameEl  = document.getElementById("awardWinnerName");
+  const winnerDeptEl  = document.getElementById("awardWinnerDept");
+  const winnerVotesEl = document.getElementById("awardWinnerVotes");
+  const finalListEl   = document.getElementById("awardsFinalList");
+
+  function hide(...els) { els.forEach(e => { e.style.display = "none"; }); }
+  function show(...els) { els.forEach(e => { e.style.display = ""; }); }
+
+  const categories = s.categories || [];
+  const idx = s.currentIndex || 0;
+  const cat = categories[idx];
+
+  // Reset all sub-elements each render
+  hide(teaserEl, winnerNameEl, winnerDeptEl, winnerVotesEl, finalListEl);
+  show(categoryEl);
+
+  if (!s.status || s.status === "idle") {
+    eyebrow.textContent = "STAFF AWARDS";
+    categoryEl.textContent = "Award ceremony coming up";
+    return;
+  }
+
+  if (s.status === "category" && cat) {
+    eyebrow.textContent = `STAFF AWARDS · ${idx + 1} OF ${categories.length}`;
+    categoryEl.textContent = cat.name;
+    show(teaserEl);
+    return;
+  }
+
+  if (s.status === "revealed" && cat) {
+    const w = cat.winner;
+    eyebrow.textContent = `🏆  ${cat.name}`;
+    hide(categoryEl, teaserEl);
+    if (w) {
+      winnerNameEl.textContent = w.name;
+      winnerDeptEl.textContent = [w.dept, w.unit].filter(Boolean).join("  ·  ");
+      winnerVotesEl.textContent = `${w.votes} vote${w.votes === 1 ? "" : "s"}`;
+      show(winnerNameEl, winnerDeptEl, winnerVotesEl);
+    }
+    if (lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx) burstConfetti();
+  }
+
+  if (s.status === "finished") {
+    eyebrow.textContent = "STAFF AWARDS 2026";
+    categoryEl.textContent = "Thank You, Everyone!";
+    show(finalListEl);
+    finalListEl.innerHTML = "";
+    categories.forEach(c => {
+      if (!c.winner) return;
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="acat">${c.name}</span><span class="awin">${c.winner.name}</span>`;
+      finalListEl.appendChild(li);
+    });
+    if (lastAwardsStatus !== "finished") burstConfetti();
+  }
+
+  lastAwardsStatus = s.status;
+  lastAwardsIndex = idx;
+}
+
 /* ===================== mode router ===================== */
 let activeModeUnsub = null;
 async function setup() {
@@ -389,6 +481,8 @@ async function setup() {
       activeModeUnsub = onSnapshot(doc(db, "state", "karaoke"), s => { if (s.exists()) renderKaraoke(s.data()); });
     } else if (mode === "quiz") {
       activeModeUnsub = onSnapshot(doc(db, "state", "quiz"), s => { if (s.exists()) renderQuiz(s.data()); });
+    } else if (mode === "awards") {
+      activeModeUnsub = onSnapshot(doc(db, "state", "awards"), s => { if (s.exists()) renderAwards(s.data()); else showScreen("scr-awards"); });
     } else {
       stopShuffle();
       showScreen("scr-idle");
