@@ -263,13 +263,33 @@
 
       <div class="grid" style="grid-template-columns: 1fr 1fr;">
         <div class="card">
-          <div class="eyebrow">Pull from voting portal</div>
-          <label for="gasUrl">Voting portal GAS URL</label>
-          <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/…/exec" />
-          <label for="gasYear" style="margin-top:12px;">Filter by year (optional)</label>
-          <input type="text" id="gasYear" placeholder="e.g. 2026" style="max-width:140px;" />
-          <button class="btn btn-gold btn-block" id="fetchWinnersBtn" style="margin-top:16px;">Fetch winners from portal</button>
-          <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:10px; min-height:1em;"></p>
+          <!-- Source sub-tabs -->
+          <div class="row" style="margin-bottom:18px; gap:6px;">
+            <button class="btn tab-btn active" id="awardsTabPortal" style="font-size:13px; padding:8px 14px;">From voting portal</button>
+            <button class="btn tab-btn" id="awardsTabManual" style="font-size:13px; padding:8px 14px;">Add manually</button>
+          </div>
+
+          <!-- Portal section -->
+          <div id="awardsSectionPortal">
+            <label for="gasUrl">Voting portal GAS URL</label>
+            <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/…/exec" />
+            <label for="gasYear" style="margin-top:12px;">Filter by year (optional)</label>
+            <input type="text" id="gasYear" placeholder="e.g. 2026" style="max-width:140px;" />
+            <button class="btn btn-teal btn-block" id="fetchWinnersBtn" style="margin-top:16px;">Fetch winners from portal</button>
+            <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:10px; min-height:1em;"></p>
+          </div>
+
+          <!-- Manual section -->
+          <div id="awardsSectionManual" style="display:none;">
+            <div class="row" style="gap:8px;">
+              <input type="text" id="manualAwardName" placeholder="Award name e.g. Best Employee" />
+              <button class="btn btn-teal" id="addManualAwardBtn" style="flex:0 0 auto; white-space:nowrap;">+ Add award</button>
+            </div>
+            <div id="manualAwardsList" style="margin-top:14px; max-height:380px; overflow-y:auto;">
+              <p class="muted" style="font-size:13px;">No awards added yet.</p>
+            </div>
+            <button class="btn btn-teal btn-block" id="useManualAwardsBtn" style="margin-top:14px; display:none;">Use these awards →</button>
+          </div>
         </div>
 
         <div class="card">
@@ -277,8 +297,8 @@
           <div class="big-status" id="awardsStatus"><div class="display muted">Idle</div></div>
           <p class="muted" id="awardsProgress" style="font-size:13px; margin-top:6px;"></p>
           <div class="row" style="margin-top:14px; flex-wrap:wrap; gap:8px;">
-            <button class="btn btn-gold" id="awardsCeremonyBtn">Start ceremony</button>
-            <button class="btn btn-gold" id="awardsRevealBtn">Reveal winner ✨</button>
+            <button class="btn btn-teal" id="awardsCeremonyBtn">Start ceremony</button>
+            <button class="btn btn-teal" id="awardsRevealBtn">Reveal winner ✨</button>
           </div>
           <div class="row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">
             <button class="btn btn-ghost" id="awardsNextBtn">Next award →</button>
@@ -291,9 +311,9 @@
       <div class="card" style="margin-top:18px;">
         <div class="section-title">
           <div class="eyebrow">Award categories preview</div>
-          <button class="btn btn-gold" id="pushToDisplayBtn" style="display:none;">Push to display screen</button>
+          <button class="btn btn-teal" id="pushToDisplayBtn" style="display:none;">Push to display screen</button>
         </div>
-        <div id="awardsPreview"><p class="muted">Fetch winners above to preview categories.</p></div>
+        <div id="awardsPreview"><p class="muted">Fetch winners from the portal, or add awards manually above.</p></div>
       </div>
 
     </div>
@@ -923,7 +943,21 @@ document.getElementById("resetQuizScoresBtn").addEventListener("click", async ()
 /* ===================== AWARDS ===================== */
 let fetchedCategories = [];
 
-// Fetch winners from GAS voting portal
+// ── Source sub-tab toggle ──
+document.getElementById("awardsTabPortal").addEventListener("click", () => {
+  document.getElementById("awardsTabPortal").classList.add("active");
+  document.getElementById("awardsTabManual").classList.remove("active");
+  document.getElementById("awardsSectionPortal").style.display = "";
+  document.getElementById("awardsSectionManual").style.display = "none";
+});
+document.getElementById("awardsTabManual").addEventListener("click", () => {
+  document.getElementById("awardsTabManual").classList.add("active");
+  document.getElementById("awardsTabPortal").classList.remove("active");
+  document.getElementById("awardsSectionManual").style.display = "";
+  document.getElementById("awardsSectionPortal").style.display = "none";
+});
+
+// ── Portal fetch ──
 document.getElementById("fetchWinnersBtn").addEventListener("click", async () => {
   const gasUrl = document.getElementById("gasUrl").value.trim();
   const gasYear = document.getElementById("gasYear").value.trim();
@@ -946,51 +980,168 @@ document.getElementById("fetchWinnersBtn").addEventListener("click", async () =>
     renderAwardsPreview(fetchedCategories);
     document.getElementById("pushToDisplayBtn").style.display = "";
   } catch (e) {
-    statusEl.textContent = "Fetch failed — check the URL and make sure the deployment has access: Anyone. (" + e.message + ")";
+    statusEl.textContent = "Fetch failed — check the URL and make sure deployment has access: Anyone. (" + e.message + ")";
   }
 });
 
+// ── Manual entry ──
+let manualAwards = []; // [{id, name, nominees:[{id,name,dept,unit}], winnerId}]
+
+document.getElementById("addManualAwardBtn").addEventListener("click", () => {
+  const input = document.getElementById("manualAwardName");
+  const name = input.value.trim();
+  if (!name) return;
+  manualAwards.push({ id: "ma_" + Date.now(), name, nominees: [], winnerId: null });
+  input.value = "";
+  renderManualList();
+});
+document.getElementById("manualAwardName").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("addManualAwardBtn").click();
+});
+
+function renderManualList() {
+  const wrap = document.getElementById("manualAwardsList");
+  const useBtn = document.getElementById("useManualAwardsBtn");
+  if (manualAwards.length === 0) {
+    wrap.innerHTML = `<p class="muted" style="font-size:13px;">No awards added yet.</p>`;
+    useBtn.style.display = "none";
+    return;
+  }
+  useBtn.style.display = "";
+  wrap.innerHTML = manualAwards.map((award, ai) => `
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px; flex-wrap:wrap;">
+        <strong style="font-size:15px;">${escapeHtml(award.name)}</strong>
+        <div style="display:flex; gap:5px;">
+          <button class="btn btn-ghost" data-mup="${ai}" style="font-size:12px; padding:5px 8px;" ${ai===0?"disabled":""}>↑</button>
+          <button class="btn btn-ghost" data-mdn="${ai}" style="font-size:12px; padding:5px 8px;" ${ai===manualAwards.length-1?"disabled":""}>↓</button>
+          <button class="btn btn-red" data-mdelaward="${ai}" style="font-size:12px; padding:5px 9px;">Delete</button>
+        </div>
+      </div>
+      ${award.nominees.length === 0
+        ? `<p class="muted" style="font-size:12px; margin-bottom:8px;">No nominees yet — add below. The selected nominee becomes the winner.</p>`
+        : award.nominees.map((n, ni) => `
+          <div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border);">
+            <input type="radio" name="mwinner_${award.id}" value="${ni}"
+              ${award.winnerId === n.id ? "checked" : ""}
+              data-mrad-award="${ai}" data-mrad-nid="${n.id}"
+              style="width:auto; flex:0 0 auto; cursor:pointer;" />
+            <span style="flex:1; font-size:14px;">${escapeHtml(n.name)}${n.dept ? ` <span class="muted" style="font-size:12px;">(${escapeHtml(n.dept)})</span>` : ""}</span>
+            <button class="btn btn-ghost" data-mdelnom="${ni}" data-mdelnom-award="${ai}" style="font-size:11px; padding:4px 8px; color:var(--red);">×</button>
+          </div>`).join("")
+      }
+      <div class="row" style="margin-top:10px; gap:6px;">
+        <input type="text" placeholder="Nominee name" class="mn-name" data-mn-ai="${ai}" style="flex:2; font-size:13px;" />
+        <input type="text" placeholder="Dept (opt)" class="mn-dept" data-mn-ai="${ai}" style="flex:1; min-width:80px; font-size:13px;" />
+        <button class="btn btn-teal" data-maddnom="${ai}" style="font-size:12px; padding:7px 11px; flex:0 0 auto;">+ Add</button>
+      </div>
+    </div>`).join("");
+
+  // Move up/down
+  wrap.querySelectorAll("[data-mup]").forEach(b => b.addEventListener("click", () => {
+    const i = Number(b.dataset.mup); if (i === 0) return;
+    [manualAwards[i-1], manualAwards[i]] = [manualAwards[i], manualAwards[i-1]]; renderManualList();
+  }));
+  wrap.querySelectorAll("[data-mdn]").forEach(b => b.addEventListener("click", () => {
+    const i = Number(b.dataset.mdn); if (i >= manualAwards.length-1) return;
+    [manualAwards[i], manualAwards[i+1]] = [manualAwards[i+1], manualAwards[i]]; renderManualList();
+  }));
+
+  // Delete award
+  wrap.querySelectorAll("[data-mdelward]").forEach(b => b.addEventListener("click", () => {
+    manualAwards.splice(Number(b.dataset.mdelward), 1); renderManualList();
+  }));
+  // Also handle the attribute name I actually used:
+  wrap.querySelectorAll("[data-mdelward]").forEach(b => b.addEventListener("click", () => {
+    manualAwards.splice(Number(b.dataset.mdelward), 1); renderManualList();
+  }));
+  wrap.querySelectorAll("[data-mdelaward]").forEach(b => b.addEventListener("click", () => {
+    manualAwards.splice(Number(b.dataset.mdelaward), 1); renderManualList();
+  }));
+
+  // Delete nominee
+  wrap.querySelectorAll("[data-mdelnom]").forEach(b => b.addEventListener("click", () => {
+    const ai = Number(b.dataset.mdelnomAward), ni = Number(b.dataset.mdelnom);
+    const removedId = manualAwards[ai].nominees[ni]?.id;
+    manualAwards[ai].nominees.splice(ni, 1);
+    if (manualAwards[ai].winnerId === removedId) manualAwards[ai].winnerId = manualAwards[ai].nominees[0]?.id || null;
+    renderManualList();
+  }));
+
+  // Select winner via radio
+  wrap.querySelectorAll("[data-mrad-award]").forEach(r => r.addEventListener("change", () => {
+    manualAwards[Number(r.dataset.mradAward)].winnerId = r.dataset.mradNid;
+  }));
+
+  // Add nominee
+  wrap.querySelectorAll("[data-maddnom]").forEach(b => b.addEventListener("click", () => {
+    const ai = Number(b.dataset.maddnom);
+    const nameEl = wrap.querySelector(`.mn-name[data-mn-ai="${ai}"]`);
+    const deptEl = wrap.querySelector(`.mn-dept[data-mn-ai="${ai}"]`);
+    const name = nameEl.value.trim(); if (!name) return;
+    const id = "n_" + Date.now() + "_" + ai;
+    manualAwards[ai].nominees.push({ id, name, dept: deptEl.value.trim(), unit: "" });
+    // Auto-select first nominee as winner
+    if (!manualAwards[ai].winnerId) manualAwards[ai].winnerId = id;
+    nameEl.value = ""; deptEl.value = "";
+    renderManualList();
+  }));
+
+  // Enter key on nominee name inputs
+  wrap.querySelectorAll(".mn-name").forEach(inp => inp.addEventListener("keydown", e => {
+    if (e.key === "Enter") wrap.querySelector(`[data-maddnom="${inp.dataset.mnAi}"]`)?.click();
+  }));
+}
+
+document.getElementById("useManualAwardsBtn").addEventListener("click", () => {
+  if (manualAwards.length === 0) { toast("Add at least one award first."); return; }
+  fetchedCategories = manualAwards.map(a => {
+    const winner = a.nominees.find(n => n.id === a.winnerId) || a.nominees[0] || null;
+    const nominees = a.nominees.map(n => ({ ...n, votes: n.id === (winner && winner.id) ? 1 : 0 }));
+    return { id: a.id, name: a.name, scope: "", year: "", winner: winner ? { ...winner, votes: 1 } : null, nominees, totalVotes: winner ? 1 : 0 };
+  });
+  renderAwardsPreview(fetchedCategories);
+  document.getElementById("pushToDisplayBtn").style.display = "";
+  toast(`${fetchedCategories.length} award${fetchedCategories.length === 1 ? "" : "s"} ready — push to display when ready.`);
+});
+
+// ── Shared preview table ──
 function renderAwardsPreview(categories) {
   const wrap = document.getElementById("awardsPreview");
   if (!categories || categories.length === 0) {
-    wrap.innerHTML = `<p class="muted">No categories to preview.</p>`;
-    return;
+    wrap.innerHTML = `<p class="muted">No categories to preview.</p>`; return;
   }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>#</th><th>Award</th><th>Winner</th><th>Dept / Unit</th><th>Votes</th><th>Nominees</th></tr></thead>
+      <thead><tr><th>#</th><th>Award</th><th>Winner</th><th>Dept / Unit</th><th>Votes</th><th>All nominees</th></tr></thead>
       <tbody>${categories.map((c, i) => {
         const w = c.winner;
         const dept = w ? [w.dept, w.unit].filter(Boolean).join(" · ") : "—";
         return `<tr>
           <td class="mono">${i + 1}</td>
           <td>${escapeHtml(c.name)}</td>
-          <td style="color:var(--gold);">${w ? escapeHtml(w.name) : '<span class="muted">No votes yet</span>'}</td>
+          <td style="color:var(--teal);">${w ? escapeHtml(w.name) : '<span class="muted">No winner set</span>'}</td>
           <td class="muted">${escapeHtml(dept)}</td>
           <td class="mono">${w ? w.votes : 0} / ${c.totalVotes}</td>
-          <td class="muted">${c.nominees.map(n => escapeHtml(n.name)).join(", ")}</td>
+          <td class="muted" style="font-size:12px;">${c.nominees.map(n => escapeHtml(n.name)).join(", ")}</td>
         </tr>`;
       }).join("")}</tbody>
     </table>`;
 }
 
-// Push fetched data into Firestore so the display screen can read it
+// ── Push to Firestore ──
 document.getElementById("pushToDisplayBtn").addEventListener("click", async () => {
-  if (fetchedCategories.length === 0) { toast("Fetch winners first."); return; }
-  await setDoc(doc(db, "state", "awards"), {
-    status: "idle",
-    currentIndex: 0,
-    categories: fetchedCategories
-  });
+  if (fetchedCategories.length === 0) { toast("No awards to push — fetch or add manually first."); return; }
+  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categories: fetchedCategories });
   await setDisplayMode("awards");
   toast(`${fetchedCategories.length} awards loaded into display screen.`);
 });
 
-// Live controls
+// ── Live controls ──
 document.getElementById("awardsCeremonyBtn").addEventListener("click", async () => {
   const snap = await getDoc(doc(db, "state", "awards"));
   if (!snap.exists() || !(snap.data().categories || []).length) {
-    toast("Fetch and push winners first."); return;
+    toast("Push awards to the display screen first."); return;
   }
   await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: 0 });
   await setDisplayMode("awards");
@@ -1007,8 +1158,7 @@ document.getElementById("awardsNextBtn").addEventListener("click", async () => {
   const d = snap.data();
   const nextIndex = (d.currentIndex || 0) + 1;
   if (nextIndex >= (d.categories || []).length) {
-    toast("That was the last award — use End ceremony to wrap up.");
-    return;
+    toast("That was the last award — use End ceremony to show the full list."); return;
   }
   await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: nextIndex });
 });
@@ -1022,6 +1172,7 @@ document.getElementById("awardsResetBtn").addEventListener("click", async () => 
   await setDisplayMode("idle");
 });
 
+// ── Live status watcher ──
 function watchAwards() {
   onSnapshot(doc(db, "state", "awards"), snap => {
     const el = document.getElementById("awardsStatus");
@@ -1031,22 +1182,26 @@ function watchAwards() {
     const cats = s.categories || [];
     const idx = s.currentIndex || 0;
     const cat = cats[idx];
+
     if (s.status === "idle") {
       el.innerHTML = `<div class="display muted">Idle</div>`;
-      prog.textContent = cats.length ? `${cats.length} awards loaded` : "";
+      prog.textContent = cats.length ? `${cats.length} award${cats.length===1?"":"s"} loaded` : "";
     } else if (s.status === "category") {
-      el.innerHTML = `<div class="display" style="color:var(--gold);">${escapeHtml(cat ? cat.name : "—")}</div><p class="muted" style="font-size:14px;">Showing category — press Reveal winner when ready</p>`;
+      el.innerHTML = `<div class="display" style="color:var(--teal);">${escapeHtml(cat ? cat.name : "—")}</div>
+        <p class="muted" style="font-size:13px; margin-top:6px;">Showing category name — press Reveal winner when ready</p>`;
       prog.textContent = `Award ${idx + 1} of ${cats.length}`;
     } else if (s.status === "revealed") {
       const w = cat && cat.winner;
-      el.innerHTML = `<div class="display" style="color:var(--gold);">🏆 ${escapeHtml(w ? w.name : "—")}</div><p class="muted" style="font-size:13px;">${escapeHtml(cat ? cat.name : "")}</p>`;
+      el.innerHTML = `<div class="display" style="color:var(--teal);">🏆 ${escapeHtml(w ? w.name : "—")}</div>
+        <p class="muted" style="font-size:13px; margin-top:6px;">${escapeHtml(cat ? cat.name : "")}</p>`;
       prog.textContent = `Award ${idx + 1} of ${cats.length}`;
     } else if (s.status === "finished") {
-      el.innerHTML = `<div class="display" style="color:var(--gold);">Ceremony complete 🏁</div>`;
+      el.innerHTML = `<div class="display" style="color:var(--teal);">Ceremony complete 🏁</div>`;
       prog.textContent = `All ${cats.length} awards announced`;
     }
-    // Keep local preview in sync with what's in Firestore
-    if (cats.length && document.getElementById("awardsPreview").querySelector("table") === null) {
+
+    // Keep preview in sync when admin page is freshly loaded mid-ceremony
+    if (cats.length && !document.getElementById("awardsPreview").querySelector("table")) {
       renderAwardsPreview(cats);
       fetchedCategories = cats;
       document.getElementById("pushToDisplayBtn").style.display = "";
