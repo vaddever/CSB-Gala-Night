@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="firebase-config.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
 <style>
   html, body { height: 100%; overflow: hidden; }
   .screen {
@@ -58,18 +59,47 @@
 
   canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
 
+  /* ---- karaoke YouTube player ---- */
+  #yt-player-wrap {
+    display: none; width: 100%; max-width: min(1100px, 88vw);
+    aspect-ratio: 16/9; border-radius: 16px; overflow: hidden;
+    margin: 1.5vw auto 0; background: #000; flex-shrink: 0;
+  }
+  #yt-player { width: 100%; height: 100%; }
+
   /* ---- awards ---- */
   #scr-awards .eyebrow { font-size: 1.5vw; color: var(--teal); margin-bottom: 0.6vw; }
-  #scr-awards .award-category { font-size: 6vw; line-height: 1; }
-  #scr-awards .award-teaser { font-size: 2.2vw; color: var(--text-muted); margin-top: 2vw; animation: awardblink 1.6s ease-in-out infinite; }
-  #scr-awards .winner-name { font-size: 9vw; color: var(--teal); text-shadow: 0 0 80px rgba(54,214,197,0.45); line-height: 1; }
-  #scr-awards .winner-dept { font-size: 2vw; color: var(--text-muted); margin-top: 1vw; }
-  #scr-awards .winner-votes { font-family: var(--font-mono); font-size: 1.5vw; color: var(--teal-dim); margin-top: 1vw; }
+  #scr-awards .award-category { font-size: 5.5vw; line-height: 1; }
+  #scr-awards .award-teaser { font-size: 2.2vw; color: var(--text-muted); margin-top: 1.4vw; animation: awardblink 1.6s ease-in-out infinite; }
+  #scr-awards .winner-name { font-size: 7vw; color: var(--teal); text-shadow: 0 0 80px rgba(54,214,197,0.45); line-height: 1; margin-top: 1vw; }
+  #scr-awards .winner-dept { font-size: 2vw; color: var(--text-muted); margin-top: 0.8vw; }
+  #scr-awards .winner-votes { font-family: var(--font-mono); font-size: 1.5vw; color: var(--teal-dim); margin-top: 0.6vw; }
   @keyframes awardblink { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  /* Photo shuffle */
+  #awardsPhotoWrap { display:none; flex-direction:column; align-items:center; margin-top:1.8vw; }
+  #awardsShufflePhoto {
+    width: 20vw; height: 20vw; object-fit: cover; border-radius: 50%;
+    border: 0.4vw solid rgba(54,214,197,0.5);
+    transition: opacity 0.08s;
+  }
+  #awardsShuffleName { font-size: 2.4vw; color: var(--text-muted); margin-top: 1vw; font-family: var(--font-display); }
+
+  /* Winner photo reveal */
+  #awardsWinnerPhotoWrap { display:none; flex-direction:column; align-items:center; margin-top: 1.4vw; }
+  #awardsWinnerPhoto {
+    width: 26vw; height: 26vw; object-fit: cover; border-radius: 50%;
+    border: 0.5vw solid var(--teal);
+    box-shadow: 0 0 8vw rgba(54,214,197,0.5);
+    animation: photoIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes photoIn { from { transform: scale(0.6); opacity:0; } to { transform: scale(1); opacity:1; } }
+
   .awards-final-list { list-style:none; padding:0; margin: 2vw auto 0; max-width: 760px; width:100%; text-align:left; }
-  .awards-final-list li { display:flex; justify-content:space-between; align-items:baseline; padding: 0.8vw 0; border-bottom: 1px solid var(--border); }
+  .awards-final-list li { display:flex; justify-content:space-between; align-items:center; padding: 0.8vw 0; border-bottom: 1px solid var(--border); gap: 1vw; }
   .awards-final-list .acat { color: var(--text-muted); font-size: 1.6vw; }
   .awards-final-list .awin { color: var(--teal); font-size: 2vw; }
+  .awards-final-list .a-thumb { width:3vw; height:3vw; border-radius:50%; object-fit:cover; border:2px solid var(--teal); flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -92,6 +122,7 @@
   <div class="eyebrow" id="karaokeEyebrow">KARAOKE NIGHT</div>
   <div class="pair" id="karaokePair">—</div>
   <div class="song" id="karaokeSong"></div>
+  <div id="yt-player-wrap"><div id="yt-player"></div></div>
   <div class="votecount" id="karaokeVotes"></div>
   <div class="scores" id="karaokeScores"></div>
   <ul class="leaderboard" id="karaokeLeaderboard"></ul>
@@ -115,7 +146,19 @@
 <div class="screen" id="scr-awards">
   <div class="eyebrow" id="awardsEyebrow">STAFF AWARDS</div>
   <div class="award-category" id="awardCategory"></div>
+
+  <!-- Nominee photo shuffle (shown during 'category' phase) -->
+  <div id="awardsPhotoWrap">
+    <img id="awardsShufflePhoto" src="" alt="" />
+    <div id="awardsShuffleName"></div>
+  </div>
   <div class="award-teaser" id="awardTeaser">And the winner is…</div>
+
+  <!-- Winner photo reveal (shown during 'revealed' phase) -->
+  <div id="awardsWinnerPhotoWrap">
+    <img id="awardsWinnerPhoto" src="" alt="" />
+  </div>
+
   <div class="winner-name" id="awardWinnerName"></div>
   <div class="winner-dept" id="awardWinnerDept"></div>
   <div class="winner-votes" id="awardWinnerVotes"></div>
@@ -257,6 +300,52 @@ function renderDraw(s) {
   lastDrawStatus = s.status;
 }
 
+/* ===================== YouTube player ===================== */
+let ytPlayer = null;
+let ytReady = false;
+let ytPendingPlay = false;
+let ytCurrentVideoId = null;
+
+window.onYouTubeIframeAPIReady = function() { ytReady = true; };
+
+function loadYouTubePlayer(videoId, shouldPlay) {
+  const wrap = document.getElementById("yt-player-wrap");
+  wrap.style.display = "flex";
+
+  if (ytPlayer && ytCurrentVideoId === videoId) {
+    if (shouldPlay) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
+    return;
+  }
+
+  ytPendingPlay = shouldPlay;
+  ytCurrentVideoId = videoId;
+
+  if (ytPlayer) {
+    ytPlayer.loadVideoById(videoId);
+    return;
+  }
+
+  if (!ytReady) { setTimeout(() => loadYouTubePlayer(videoId, shouldPlay), 400); return; }
+
+  ytPlayer = new YT.Player("yt-player", {
+    videoId,
+    width: "100%", height: "100%",
+    playerVars: { controls: 0, rel: 0, modestbranding: 1, showinfo: 0 },
+    events: {
+      onReady: () => { if (ytPendingPlay) ytPlayer.playVideo(); else ytPlayer.pauseVideo(); },
+      onStateChange: ev => {
+        // If video finished, pause at end
+        if (ev.data === YT.PlayerState.ENDED) ytPlayer.seekTo(0);
+      }
+    }
+  });
+}
+
+function hideYouTubePlayer() {
+  if (ytPlayer) { try { ytPlayer.pauseVideo(); } catch(e) {} }
+  document.getElementById("yt-player-wrap").style.display = "none";
+}
+
 /* ===================== karaoke ===================== */
 let karaokeVoteUnsub = null;
 async function renderKaraoke(s) {
@@ -269,6 +358,7 @@ async function renderKaraoke(s) {
     document.getElementById("karaokePair").textContent = "Get the mics ready";
     document.getElementById("karaokeSong").textContent = "Karaoke night is about to begin";
     if (karaokeVoteUnsub) { karaokeVoteUnsub(); karaokeVoteUnsub = null; }
+    hideYouTubePlayer();
     return;
   }
 
@@ -279,12 +369,19 @@ async function renderKaraoke(s) {
   document.getElementById("karaokeSong").textContent = pair.song || "";
 
   if (s.phase === "performing") {
+    // YouTube video
+    if (s.videoId) {
+      loadYouTubePlayer(s.videoId, s.videoPlaying === true);
+    } else {
+      hideYouTubePlayer();
+    }
     if (karaokeVoteUnsub) karaokeVoteUnsub();
     const votesQuery = query(collection(db, "karaoke_votes"), where("pairId", "==", s.currentPairId));
     karaokeVoteUnsub = onSnapshot(votesQuery, snap => {
       document.getElementById("karaokeVotes").textContent = `${snap.size} vote${snap.size === 1 ? "" : "s"} in`;
     });
   } else if (s.phase === "results") {
+    hideYouTubePlayer();
     if (karaokeVoteUnsub) { karaokeVoteUnsub(); karaokeVoteUnsub = null; }
     document.getElementById("karaokeScores").innerHTML =
       `Performance <span>${(pair.avgPerformance || 0).toFixed(1)}</span> &nbsp; Singing <span>${(pair.avgSinging || 0).toFixed(1)}</span>`;
@@ -401,29 +498,64 @@ async function renderQuiz(s) {
 /* ===================== awards ===================== */
 let lastAwardsStatus = null;
 let lastAwardsIndex = -1;
+let awardsShuffleInterval = null;
+
+function startNomineePhotoShuffle(nominees) {
+  if (awardsShuffleInterval) { clearInterval(awardsShuffleInterval); awardsShuffleInterval = null; }
+  const photos = nominees.filter(n => n.photoBase64);
+  const photoEl = document.getElementById("awardsShufflePhoto");
+  const nameEl  = document.getElementById("awardsShuffleName");
+  const wrap    = document.getElementById("awardsPhotoWrap");
+
+  if (photos.length === 0) { wrap.style.display = "none"; return; }
+
+  wrap.style.display = "flex";
+  let idx = 0;
+  const showNext = () => {
+    photoEl.style.opacity = 0;
+    setTimeout(() => {
+      photoEl.src = photos[idx].photoBase64;
+      nameEl.textContent = photos[idx].name;
+      photoEl.style.opacity = 1;
+      idx = (idx + 1) % photos.length;
+    }, 80);
+  };
+  // Start fast, no transition initially
+  photoEl.style.transition = "opacity 0.08s";
+  showNext();
+  awardsShuffleInterval = setInterval(showNext, 280);
+}
+
+function stopNomineePhotoShuffle() {
+  if (awardsShuffleInterval) { clearInterval(awardsShuffleInterval); awardsShuffleInterval = null; }
+}
 
 function renderAwards(s) {
   showScreen("scr-awards");
-  const eyebrow    = document.getElementById("awardsEyebrow");
-  const categoryEl = document.getElementById("awardCategory");
-  const teaserEl   = document.getElementById("awardTeaser");
-  const winnerNameEl  = document.getElementById("awardWinnerName");
-  const winnerDeptEl  = document.getElementById("awardWinnerDept");
-  const winnerVotesEl = document.getElementById("awardWinnerVotes");
-  const finalListEl   = document.getElementById("awardsFinalList");
+  const eyebrow          = document.getElementById("awardsEyebrow");
+  const categoryEl       = document.getElementById("awardCategory");
+  const teaserEl         = document.getElementById("awardTeaser");
+  const photoWrap        = document.getElementById("awardsPhotoWrap");
+  const winnerPhotoWrap  = document.getElementById("awardsWinnerPhotoWrap");
+  const winnerPhotoEl    = document.getElementById("awardsWinnerPhoto");
+  const winnerNameEl     = document.getElementById("awardWinnerName");
+  const winnerDeptEl     = document.getElementById("awardWinnerDept");
+  const winnerVotesEl    = document.getElementById("awardWinnerVotes");
+  const finalListEl      = document.getElementById("awardsFinalList");
 
-  function hide(...els) { els.forEach(e => { e.style.display = "none"; }); }
-  function show(...els) { els.forEach(e => { e.style.display = ""; }); }
+  const hide = (...els) => els.forEach(e => { e.style.display = "none"; });
+  const show = (el, d="") => el.style.display = d;
 
   const categories = s.categories || [];
   const idx = s.currentIndex || 0;
   const cat = categories[idx];
 
-  // Reset all sub-elements each render
-  hide(teaserEl, winnerNameEl, winnerDeptEl, winnerVotesEl, finalListEl);
+  // Reset every render
+  hide(teaserEl, photoWrap, winnerPhotoWrap, winnerNameEl, winnerDeptEl, winnerVotesEl, finalListEl);
   show(categoryEl);
 
   if (!s.status || s.status === "idle") {
+    stopNomineePhotoShuffle();
     eyebrow.textContent = "STAFF AWARDS";
     categoryEl.textContent = "Award ceremony coming up";
     return;
@@ -433,23 +565,40 @@ function renderAwards(s) {
     eyebrow.textContent = `STAFF AWARDS · ${idx + 1} OF ${categories.length}`;
     categoryEl.textContent = cat.name;
     show(teaserEl);
+
+    // Shuffle nominee photos — only restart if we moved to a new category
+    if (lastAwardsIndex !== idx) {
+      startNomineePhotoShuffle(cat.nominees || []);
+    }
     return;
   }
 
   if (s.status === "revealed" && cat) {
+    stopNomineePhotoShuffle();
     const w = cat.winner;
     eyebrow.textContent = `🏆  ${cat.name}`;
     hide(categoryEl, teaserEl);
+
+    if (w && w.photoBase64) {
+      // Re-trigger animation by replacing src
+      winnerPhotoEl.style.animation = "none";
+      winnerPhotoEl.src = w.photoBase64;
+      winnerPhotoEl.offsetHeight; // reflow
+      winnerPhotoEl.style.animation = "";
+      show(winnerPhotoWrap, "flex");
+    }
+
     if (w) {
       winnerNameEl.textContent = w.name;
       winnerDeptEl.textContent = [w.dept, w.unit].filter(Boolean).join("  ·  ");
-      winnerVotesEl.textContent = `${w.votes} vote${w.votes === 1 ? "" : "s"}`;
-      show(winnerNameEl, winnerDeptEl, winnerVotesEl);
+      if (w.votes) winnerVotesEl.textContent = `${w.votes} vote${w.votes === 1 ? "" : "s"}`;
+      show(winnerNameEl); show(winnerDeptEl); if (w.votes) show(winnerVotesEl);
     }
     if (lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx) burstConfetti();
   }
 
   if (s.status === "finished") {
+    stopNomineePhotoShuffle();
     eyebrow.textContent = "STAFF AWARDS 2026";
     categoryEl.textContent = "Thank You, Everyone!";
     show(finalListEl);
@@ -457,7 +606,10 @@ function renderAwards(s) {
     categories.forEach(c => {
       if (!c.winner) return;
       const li = document.createElement("li");
-      li.innerHTML = `<span class="acat">${c.name}</span><span class="awin">${c.winner.name}</span>`;
+      li.innerHTML = `
+        ${c.winner.photoBase64 ? `<img class="a-thumb" src="${c.winner.photoBase64}" alt="" />` : ""}
+        <span class="acat">${c.name}</span>
+        <span class="awin">${c.winner.name}</span>`;
       finalListEl.appendChild(li);
     });
     if (lastAwardsStatus !== "finished") burstConfetti();
