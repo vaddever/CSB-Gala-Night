@@ -81,6 +81,28 @@
 
   .danger-zone { border: 1px dashed var(--red); border-radius: var(--radius); padding: 16px; margin-top: 24px; }
   .danger-zone .eyebrow { color: var(--red); }
+
+  /* ── YouTube thumbnails ── */
+  .song-thumb { width: 52px; height: 36px; object-fit: cover; border-radius: 5px; vertical-align: middle; margin-right: 8px; background: var(--surface-2); }
+  .song-thumb-placeholder { display:inline-block; width:52px; height:36px; border-radius:5px; background: var(--surface-2); vertical-align:middle; margin-right:8px; }
+  .yt-input-wrap { display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap; margin-top:8px; }
+  .yt-input-wrap input { flex:1; min-width:160px; }
+  .yt-thumb-preview { width:72px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--border); display:none; }
+  .video-controls { display:flex; gap:6px; margin-left:4px; }
+  .btn-play  { background: var(--pink); color:#fff; border:none; }
+  .btn-pause { background: transparent; border:1px solid var(--pink); color:var(--pink); }
+
+  /* ── Photo drop zone ── */
+  .photo-drop {
+    border: 1.5px dashed var(--border); border-radius: 10px; padding: 10px 12px;
+    text-align: center; font-size: 12px; color: var(--text-muted); cursor: pointer;
+    transition: border-color 0.15s; flex: 0 0 80px; min-width: 80px;
+  }
+  .photo-drop:hover, .photo-drop.drag-over { border-color: var(--teal); color: var(--teal); }
+  .photo-drop input[type=file] { display:none; }
+  .nominee-photo-preview { width:48px; height:48px; object-fit:cover; border-radius:50%; border:2px solid var(--teal); display:none; flex:0 0 48px; }
+  .nominee-row { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .nominee-row:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -186,11 +208,15 @@
       <div class="grid" style="grid-template-columns: 1fr 1fr;">
         <div class="card">
           <div class="eyebrow">Song bank</div>
-          <div class="row" style="margin-top:10px;">
+          <div style="margin-top:10px;">
             <input type="text" id="songInput" placeholder="Song title — artist" />
-            <button class="btn btn-pink" id="addSongBtn" style="flex:0 0 auto;">Add</button>
+            <div class="yt-input-wrap" style="margin-top:8px;">
+              <input type="url" id="songYoutubeUrl" placeholder="YouTube URL (optional)" />
+              <img id="songThumbPreview" class="yt-thumb-preview" alt="thumbnail" />
+            </div>
+            <button class="btn btn-pink btn-block" id="addSongBtn" style="margin-top:10px;">Add song</button>
           </div>
-          <div style="max-height: 220px; overflow:auto; margin-top:14px;">
+          <div style="max-height: 240px; overflow:auto; margin-top:14px;">
             <table>
               <thead><tr><th>Song</th><th>Status</th><th></th></tr></thead>
               <tbody id="songRows"><tr><td colspan="3" class="muted">No songs yet.</td></tr></tbody>
@@ -633,11 +659,29 @@ function renderPairingCounts() {
     `${males} unpaired men · ${females} unpaired women waiting to be matched.`;
 }
 
+function extractYouTubeId(url) {
+  const m = (url || "").match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
+  return m ? m[1] : null;
+}
+
+// Live thumbnail preview while typing YouTube URL
+document.getElementById("songYoutubeUrl").addEventListener("input", function() {
+  const vid = extractYouTubeId(this.value);
+  const thumb = document.getElementById("songThumbPreview");
+  if (vid) { thumb.src = `https://img.youtube.com/vi/${vid}/mqdefault.jpg`; thumb.style.display = "block"; }
+  else { thumb.style.display = "none"; thumb.src = ""; }
+});
+
 document.getElementById("addSongBtn").addEventListener("click", async () => {
   const title = document.getElementById("songInput").value.trim();
   if (!title) return;
-  await addDoc(collection(db, "karaoke_songs"), { title, assigned: false, createdAt: serverTimestamp() });
+  const ytUrl = document.getElementById("songYoutubeUrl").value.trim();
+  const videoId = extractYouTubeId(ytUrl) || null;
+  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+  await addDoc(collection(db, "karaoke_songs"), { title, videoId, thumbnailUrl, assigned: false, createdAt: serverTimestamp() });
   document.getElementById("songInput").value = "";
+  document.getElementById("songYoutubeUrl").value = "";
+  document.getElementById("songThumbPreview").style.display = "none";
 });
 
 function renderSongRows() {
@@ -645,7 +689,11 @@ function renderSongRows() {
   if (karaokeSongs.length === 0) { rows.innerHTML = `<tr><td colspan="3" class="muted">No songs yet.</td></tr>`; return; }
   rows.innerHTML = karaokeSongs.map(s => `
     <tr>
-      <td>${escapeHtml(s.title)}</td>
+      <td style="vertical-align:middle;">
+        ${s.thumbnailUrl ? `<img class="song-thumb" src="${escapeHtml(s.thumbnailUrl)}" alt="" />` : `<span class="song-thumb-placeholder"></span>`}
+        ${escapeHtml(s.title)}
+        ${s.videoId ? `<span class="mono muted" style="font-size:11px; margin-left:4px;">▶ YT</span>` : ""}
+      </td>
       <td>${s.assigned ? '<span class="status-tag done">assigned</span>' : '<span class="status-tag pending">available</span>'}</td>
       <td><button class="btn btn-ghost" data-del-song="${s.id}" style="font-size:12px; padding:6px 10px;">Delete</button></td>
     </tr>
@@ -698,23 +746,39 @@ function shuffle(arr) {
 function renderPairRows() {
   const wrap = document.getElementById("pairRows");
   if (karaokePairs.length === 0) { wrap.innerHTML = `<p class="muted">No pairs yet — add songs and generate pairs.</p>`; return; }
-  wrap.innerHTML = karaokePairs.map(p => `
+  wrap.innerHTML = karaokePairs.map(p => {
+    const song = karaokeSongs.find(s => s.id === p.songId);
+    const hasVideo = !!(song && song.videoId);
+    return `
     <div class="pair-row" data-pair="${p.id}">
-      <div>
-        <div class="who">${escapeHtml(p.maleName)} &amp; ${escapeHtml(p.femaleName)}</div>
-        <div class="meta">${escapeHtml(p.song || "")}</div>
-      </div>
       <div style="display:flex; align-items:center; gap:10px;">
+        ${song?.thumbnailUrl ? `<img src="${escapeHtml(song.thumbnailUrl)}" style="width:48px;height:34px;object-fit:cover;border-radius:5px;" />` : ""}
+        <div>
+          <div class="who">${escapeHtml(p.maleName)} &amp; ${escapeHtml(p.femaleName)}</div>
+          <div class="meta">${escapeHtml(p.song || "")}${hasVideo ? " · ▶ video ready" : ""}</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <span class="status-tag ${p.status}">${p.status}</span>
         ${p.status === "pending" ? `<button class="btn btn-pink" data-stage="${p.id}" style="font-size:12px; padding:7px 12px;">Put on stage</button>` : ""}
-        ${p.status === "performing" ? `<span class="mono muted" id="votecount-${p.id}" style="font-size:12px;">0 votes</span><button class="btn btn-red" data-close="${p.id}" style="font-size:12px; padding:7px 12px;">Close voting</button>` : ""}
+        ${p.status === "performing" ? `
+          <span class="mono muted" id="votecount-${p.id}" style="font-size:12px;">0 votes</span>
+          ${hasVideo ? `<div class="video-controls"><button class="btn btn-play" data-play="${p.id}" style="font-size:12px; padding:7px 12px;">▶ Play</button><button class="btn btn-pause" data-pause="${p.id}" style="font-size:12px; padding:7px 12px;">⏸</button></div>` : ""}
+          <button class="btn btn-red" data-close="${p.id}" style="font-size:12px; padding:7px 12px;">Close voting</button>
+        ` : ""}
         ${p.status === "done" ? `<span class="mono" style="font-size:13px; color:var(--gold);">${(p.totalScore || 0).toFixed(1)} pts</span>` : ""}
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 
   wrap.querySelectorAll("[data-stage]").forEach(btn => btn.addEventListener("click", () => stagePair(btn.dataset.stage)));
   wrap.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", () => closeVoting(btn.dataset.close)));
+  wrap.querySelectorAll("[data-play]").forEach(btn => btn.addEventListener("click", () =>
+    updateDoc(doc(db, "state", "karaoke"), { videoPlaying: true })
+  ));
+  wrap.querySelectorAll("[data-pause]").forEach(btn => btn.addEventListener("click", () =>
+    updateDoc(doc(db, "state", "karaoke"), { videoPlaying: false })
+  ));
 
   karaokePairs.filter(p => p.status === "performing").forEach(p => {
     getDocs(query(collection(db, "karaoke_votes"))).then(snap => {
@@ -726,8 +790,15 @@ function renderPairRows() {
 }
 
 async function stagePair(pairId) {
+  const pair = karaokePairs.find(p => p.id === pairId);
+  const song = pair?.songId ? karaokeSongs.find(s => s.id === pair.songId) : null;
   await updateDoc(doc(db, "karaoke_pairs", pairId), { status: "performing" });
-  await setDoc(doc(db, "state", "karaoke"), { phase: "performing", currentPairId: pairId });
+  await setDoc(doc(db, "state", "karaoke"), {
+    phase: "performing",
+    currentPairId: pairId,
+    videoId: song?.videoId || null,
+    videoPlaying: false
+  });
   await setDisplayMode("karaoke");
 }
 
@@ -1003,6 +1074,42 @@ document.getElementById("manualAwardName").addEventListener("keydown", e => {
   if (e.key === "Enter") document.getElementById("addManualAwardBtn").click();
 });
 
+/* ── Image compression helper ── */
+function compressImage(file, maxPx = 320, quality = 0.75) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function setupPhotoDropZone(el, onPhoto) {
+  el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("drag-over"); });
+  el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
+  el.addEventListener("drop", async e => {
+    e.preventDefault(); el.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) onPhoto(await compressImage(file));
+  });
+  const inp = el.querySelector("input[type=file]");
+  el.addEventListener("click", e => { if (e.target !== inp) inp.click(); });
+  inp.addEventListener("change", async () => {
+    if (inp.files[0]) onPhoto(await compressImage(inp.files[0]));
+    inp.value = "";
+  });
+}
+
 function renderManualList() {
   const wrap = document.getElementById("manualAwardsList");
   const useBtn = document.getElementById("useManualAwardsBtn");
@@ -1023,15 +1130,19 @@ function renderManualList() {
         </div>
       </div>
       ${award.nominees.length === 0
-        ? `<p class="muted" style="font-size:12px; margin-bottom:8px;">No nominees yet — add below. The selected nominee becomes the winner.</p>`
+        ? `<p class="muted" style="font-size:12px; margin-bottom:8px;">No nominees yet. Radio = winner selection. Drop a photo on each nominee.</p>`
         : award.nominees.map((n, ni) => `
-          <div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border);">
+          <div class="nominee-row">
             <input type="radio" name="mwinner_${award.id}" value="${ni}"
               ${award.winnerId === n.id ? "checked" : ""}
               data-mrad-award="${ai}" data-mrad-nid="${n.id}"
               style="width:auto; flex:0 0 auto; cursor:pointer;" />
+            ${n.photoBase64
+              ? `<img src="${n.photoBase64}" class="nominee-photo-preview" style="display:inline-block;" />`
+              : `<div class="photo-drop" data-drop-ai="${ai}" data-drop-ni="${ni}" title="Drop photo"><input type="file" accept="image/*" />📷</div>`}
             <span style="flex:1; font-size:14px;">${escapeHtml(n.name)}${n.dept ? ` <span class="muted" style="font-size:12px;">(${escapeHtml(n.dept)})</span>` : ""}</span>
-            <button class="btn btn-ghost" data-mdelnom="${ni}" data-mdelnom-award="${ai}" style="font-size:11px; padding:4px 8px; color:var(--red);">×</button>
+            ${n.photoBase64 ? `<button class="btn btn-ghost" data-clearphoto-ai="${ai}" data-clearphoto-ni="${ni}" style="font-size:11px;padding:3px 7px;">✕ photo</button>` : ""}
+            <button class="btn btn-ghost" data-mdelnom="${ni}" data-mdelnom-award="${ai}" style="font-size:11px; padding:4px 8px; color:var(--red);">× remove</button>
           </div>`).join("")
       }
       <div class="row" style="margin-top:10px; gap:6px;">
@@ -1052,13 +1163,6 @@ function renderManualList() {
   }));
 
   // Delete award
-  wrap.querySelectorAll("[data-mdelward]").forEach(b => b.addEventListener("click", () => {
-    manualAwards.splice(Number(b.dataset.mdelward), 1); renderManualList();
-  }));
-  // Also handle the attribute name I actually used:
-  wrap.querySelectorAll("[data-mdelward]").forEach(b => b.addEventListener("click", () => {
-    manualAwards.splice(Number(b.dataset.mdelward), 1); renderManualList();
-  }));
   wrap.querySelectorAll("[data-mdelaward]").forEach(b => b.addEventListener("click", () => {
     manualAwards.splice(Number(b.dataset.mdelaward), 1); renderManualList();
   }));
@@ -1072,10 +1176,25 @@ function renderManualList() {
     renderManualList();
   }));
 
+  // Clear photo
+  wrap.querySelectorAll("[data-clearphoto-ai]").forEach(b => b.addEventListener("click", () => {
+    manualAwards[Number(b.dataset.clearphotoAi)].nominees[Number(b.dataset.clearphotoNi)].photoBase64 = null;
+    renderManualList();
+  }));
+
   // Select winner via radio
   wrap.querySelectorAll("[data-mrad-award]").forEach(r => r.addEventListener("change", () => {
     manualAwards[Number(r.dataset.mradAward)].winnerId = r.dataset.mradNid;
   }));
+
+  // Photo drop zones
+  wrap.querySelectorAll(".photo-drop[data-drop-ai]").forEach(dropEl => {
+    const ai = Number(dropEl.dataset.dropAi), ni = Number(dropEl.dataset.dropNi);
+    setupPhotoDropZone(dropEl, base64 => {
+      manualAwards[ai].nominees[ni].photoBase64 = base64;
+      renderManualList();
+    });
+  });
 
   // Add nominee
   wrap.querySelectorAll("[data-maddnom]").forEach(b => b.addEventListener("click", () => {
@@ -1084,8 +1203,7 @@ function renderManualList() {
     const deptEl = wrap.querySelector(`.mn-dept[data-mn-ai="${ai}"]`);
     const name = nameEl.value.trim(); if (!name) return;
     const id = "n_" + Date.now() + "_" + ai;
-    manualAwards[ai].nominees.push({ id, name, dept: deptEl.value.trim(), unit: "" });
-    // Auto-select first nominee as winner
+    manualAwards[ai].nominees.push({ id, name, dept: deptEl.value.trim(), unit: "", photoBase64: null });
     if (!manualAwards[ai].winnerId) manualAwards[ai].winnerId = id;
     nameEl.value = ""; deptEl.value = "";
     renderManualList();
