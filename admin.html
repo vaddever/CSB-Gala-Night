@@ -132,6 +132,7 @@
     <button class="btn tab-btn" data-tab="karaoke">Karaoke</button>
     <button class="btn tab-btn" data-tab="quiz">Quiz</button>
     <button class="btn tab-btn" data-tab="awards">Awards 🏆</button>
+    <button class="btn tab-btn" data-tab="config">⚙ Config</button>
   </div>
 
   <div class="wrap">
@@ -348,6 +349,74 @@
 
     </div>
 
+    <!-- ===================== CONFIG ===================== -->
+    <div class="panel" id="panel-config">
+
+      <div class="grid">
+        <div class="card">
+          <div class="eyebrow">Firebase connection</div>
+          <p class="muted" style="font-size:13px; margin-top:6px;">Confirm Firebase is reachable before the event starts.</p>
+          <button class="btn btn-teal btn-block" id="testConnectionBtn" style="margin-top:14px;">Test connection</button>
+          <div id="connectionStatus" style="margin-top:10px; font-size:13px; min-height:20px;"></div>
+
+          <div class="eyebrow" style="margin-top:24px;">Display name</div>
+          <div class="row" style="margin-top:8px; gap:8px;">
+            <input type="text" id="configEventName" placeholder="CSB Gala Night 26" />
+            <button class="btn btn-ghost" id="saveEventNameBtn" style="flex:0 0 auto;">Save</button>
+          </div>
+          <p class="muted" style="font-size:12px; margin-top:6px;">To change the passcode or Firebase keys, edit <code>firebase-config.js</code> and re-upload to GitHub.</p>
+        </div>
+
+        <div class="card">
+          <div class="eyebrow">Add attendee manually</div>
+          <p class="muted" style="font-size:13px; margin-top:6px;">For staff who can\'t scan the QR, or for test users.</p>
+          <label style="margin-top:10px;">Staff ID <span style="color:var(--red);">*</span></label>
+          <input type="text" id="addUserStaffId" placeholder="e.g. CSB-001" />
+          <label style="margin-top:10px;">Name <span style="color:var(--red);">*</span></label>
+          <input type="text" id="addUserName" placeholder="Full name" />
+          <label style="margin-top:10px;">Contact</label>
+          <input type="text" id="addUserContact" placeholder="Phone or email" />
+          <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:13px;">
+              <input type="checkbox" id="addUserKaraoke" style="width:auto;" /> Karaoke
+            </label>
+            <span id="karaokeGenderWrap" style="display:none; gap:10px; align-items:center;">
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;"><input type="radio" name="addUserGender" value="male" checked style="width:auto;" /> Male</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;"><input type="radio" name="addUserGender" value="female" style="width:auto;" /> Female</label>
+            </span>
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:13px;">
+              <input type="checkbox" id="addUserQuiz" style="width:auto;" /> Quiz
+            </label>
+          </div>
+          <button class="btn btn-gold btn-block" id="addUserBtn" style="margin-top:14px;">Add attendee</button>
+          <p class="muted" id="addUserStatus" style="font-size:12px; margin-top:6px; min-height:1em;"></p>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:18px;">
+        <div class="card">
+          <div class="eyebrow">Testing tools</div>
+          <p class="muted" style="font-size:13px; margin-top:6px;">Quickly populate realistic test data to check the full event flow.</p>
+          <div class="row" style="margin-top:12px; flex-wrap:wrap; gap:8px;">
+            <button class="btn btn-ghost" id="addTestUsersBtn">Add 4 test attendees</button>
+            <button class="btn btn-ghost" id="clearTestDataBtn">Remove test attendees</button>
+          </div>
+          <p class="muted" id="testStatus" style="font-size:12px; margin-top:8px; min-height:1em;"></p>
+        </div>
+
+        <div class="danger-zone">
+          <div class="eyebrow">Danger zone</div>
+          <p class="muted" style="font-size:13px; margin-top:8px;">Permanently deletes data. Cannot be undone.</p>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+            <button class="btn btn-red" id="clearKaraokeDataBtn">Clear all karaoke data</button>
+            <button class="btn btn-red" id="clearQuizDataBtn">Clear all quiz scores</button>
+            <button class="btn btn-red" id="clearAllAttendeesBtn">Delete ALL attendees &amp; reset</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 </div>
 
@@ -368,7 +437,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot,
-  collection, query, orderBy, getDocs, increment, serverTimestamp, writeBatch
+  collection, query, orderBy, where, limit, getDocs, increment, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -677,7 +746,9 @@ document.getElementById("addSongBtn").addEventListener("click", async () => {
   if (!title) { toast("Enter a song title first."); return; }
   const btn = document.getElementById("addSongBtn");
   btn.disabled = true;
+  btn.textContent = "Saving…";
   try {
+    await ensureAuth(); // guarantee auth before any Firestore write
     const ytUrl = document.getElementById("songYoutubeUrl").value.trim();
     const videoId = extractYouTubeId(ytUrl) || null;
     const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
@@ -688,9 +759,10 @@ document.getElementById("addSongBtn").addEventListener("click", async () => {
     toast("✅ Song saved: " + title);
   } catch(e) {
     toast("❌ Save failed: " + e.message);
-    console.error(e);
+    console.error("addSongBtn error:", e);
   } finally {
     btn.disabled = false;
+    btn.textContent = "Add song";
   }
 });
 
@@ -1416,6 +1488,181 @@ document.getElementById("awardsResetBtn").addEventListener("click", async () => 
   manualAwards.forEach(a => { a.revealed = false; a.winners = []; });
   saveAwards(); renderManualList();
   toast("Ceremony reset.");
+});
+
+/* ===================== CONFIG ===================== */
+document.getElementById("addUserKaraoke").addEventListener("change", function() {
+  document.getElementById("karaokeGenderWrap").style.display = this.checked ? "flex" : "none";
+});
+
+document.getElementById("testConnectionBtn").addEventListener("click", async () => {
+  const el = document.getElementById("connectionStatus");
+  el.textContent = "Connecting...";
+  el.style.color = "var(--text-muted)";
+  try {
+    await ensureAuth();
+    await getDoc(doc(db, "state", "display"));
+    el.textContent = "Connected to Firebase.";
+    el.style.color = "var(--teal)";
+    toast("Firebase OK");
+  } catch(e) {
+    el.textContent = "Failed: " + e.message;
+    el.style.color = "var(--red)";
+    toast("Firebase error: " + e.message);
+  }
+});
+
+document.getElementById("saveEventNameBtn").addEventListener("click", async () => {
+  const name = document.getElementById("configEventName").value.trim();
+  if (!name) return;
+  try {
+    await ensureAuth();
+    await setDoc(doc(db, "state", "config"), { eventName: name }, { merge: true });
+    document.getElementById("topEventName").textContent = name;
+    toast("Event name updated.");
+  } catch(e) { toast("Failed: " + e.message); }
+});
+
+onSnapshot(doc(db, "state", "config"), snap => {
+  if (snap.exists() && snap.data().eventName) {
+    document.getElementById("topEventName").textContent = snap.data().eventName;
+    const inp = document.getElementById("configEventName");
+    if (!inp.value) inp.value = snap.data().eventName;
+  }
+});
+
+document.getElementById("addUserBtn").addEventListener("click", async () => {
+  const staffId  = document.getElementById("addUserStaffId").value.trim();
+  const name     = document.getElementById("addUserName").value.trim();
+  const contact  = document.getElementById("addUserContact").value.trim();
+  const statusEl = document.getElementById("addUserStatus");
+  if (!staffId || !name) { toast("Staff ID and Name are required."); return; }
+  const btn = document.getElementById("addUserBtn");
+  btn.disabled = true; btn.textContent = "Adding...";
+  statusEl.textContent = "";
+  try {
+    await ensureAuth();
+    const existing = await getDocs(query(collection(db, "attendees"), where("staffId", "==", staffId), limit(1)));
+    let attendeeId;
+    if (!existing.empty) {
+      attendeeId = existing.docs[0].id;
+      await updateDoc(doc(db, "attendees", attendeeId), { name, contact: contact||"" });
+      statusEl.textContent = "Updated existing attendee.";
+    } else {
+      attendeeId = "admin_" + Date.now();
+      await setDoc(doc(db, "attendees", attendeeId), {
+        attendeeId, staffId, name, contact: contact||"",
+        checkedIn: true, checkedInAt: serverTimestamp(),
+        registeredAt: serverTimestamp(), source: "admin"
+      });
+      statusEl.textContent = "Attendee added.";
+    }
+    if (document.getElementById("addUserKaraoke").checked) {
+      const gender = document.querySelector("input[name=addUserGender]:checked")?.value || "male";
+      await setDoc(doc(db, "karaoke_participants", attendeeId), { attendeeId, name, gender, paired: false, joinedAt: serverTimestamp() });
+    }
+    if (document.getElementById("addUserQuiz").checked) {
+      await setDoc(doc(db, "quiz_participants", attendeeId), { attendeeId, name, totalScore: 0, joinedAt: serverTimestamp() });
+    }
+    ["addUserStaffId","addUserName","addUserContact"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("addUserKaraoke").checked = false;
+    document.getElementById("addUserQuiz").checked = false;
+    document.getElementById("karaokeGenderWrap").style.display = "none";
+    toast(name + " added.");
+  } catch(e) {
+    statusEl.textContent = "Error: " + e.message;
+    toast("Failed: " + e.message);
+    console.error(e);
+  } finally { btn.disabled = false; btn.textContent = "Add attendee"; }
+});
+
+document.getElementById("addTestUsersBtn").addEventListener("click", async () => {
+  if (!confirm("Add 4 test attendees (2M + 2F), joined karaoke + quiz?")) return;
+  const s = document.getElementById("testStatus");
+  s.textContent = "Adding...";
+  try {
+    await ensureAuth();
+    const users = [
+      { id:"test_m1", staffId:"TEST-M1", name:"Test Male 1",   gender:"male"   },
+      { id:"test_m2", staffId:"TEST-M2", name:"Test Male 2",   gender:"male"   },
+      { id:"test_f1", staffId:"TEST-F1", name:"Test Female 1", gender:"female" },
+      { id:"test_f2", staffId:"TEST-F2", name:"Test Female 2", gender:"female" },
+    ];
+    const batch = writeBatch(db);
+    users.forEach(u => {
+      batch.set(doc(db,"attendees",u.id),{ attendeeId:u.id, staffId:u.staffId, name:u.name, contact:"test@example.com", checkedIn:true, checkedInAt:serverTimestamp(), registeredAt:serverTimestamp(), source:"test" });
+      batch.set(doc(db,"karaoke_participants",u.id),{ attendeeId:u.id, name:u.name, gender:u.gender, paired:false, joinedAt:serverTimestamp() });
+      batch.set(doc(db,"quiz_participants",u.id),{ attendeeId:u.id, name:u.name, totalScore:0, joinedAt:serverTimestamp() });
+    });
+    await batch.commit();
+    s.textContent = "4 test attendees added.";
+    toast("Test attendees added.");
+  } catch(e) { s.textContent = "Error: "+e.message; toast("Failed: "+e.message); }
+});
+
+document.getElementById("clearTestDataBtn").addEventListener("click", async () => {
+  if (!confirm("Remove all attendees added via Config (source = test or admin)?")) return;
+  try {
+    await ensureAuth();
+    const snap = await getDocs(query(collection(db,"attendees"), where("source","in",["test","admin"])));
+    if (snap.empty) { toast("No test attendees found."); return; }
+    const batch = writeBatch(db);
+    snap.forEach(d => {
+      batch.delete(d.ref);
+      batch.delete(doc(db,"karaoke_participants",d.id));
+      batch.delete(doc(db,"quiz_participants",d.id));
+    });
+    await batch.commit();
+    document.getElementById("testStatus").textContent = "Removed " + snap.size + " test user(s).";
+    toast("Removed " + snap.size + " test user(s).");
+  } catch(e) { toast("Failed: "+e.message); }
+});
+
+document.getElementById("clearKaraokeDataBtn").addEventListener("click", async () => {
+  if (!confirm("Clear all karaoke pairs, votes, and songs? Signups stay.")) return;
+  try {
+    await ensureAuth();
+    const batch = writeBatch(db);
+    for (const col of ["karaoke_pairs","karaoke_votes","karaoke_songs"]) {
+      (await getDocs(collection(db,col))).forEach(d => batch.delete(d.ref));
+    }
+    (await getDocs(collection(db,"karaoke_participants"))).forEach(d => batch.update(d.ref,{paired:false,pairId:null}));
+    await batch.commit();
+    await setDoc(doc(db,"state","karaoke"),{phase:"lobby",currentPairId:null,videoId:null,videoPlaying:false});
+    toast("Karaoke data cleared.");
+  } catch(e) { toast("Failed: "+e.message); }
+});
+
+document.getElementById("clearQuizDataBtn").addEventListener("click", async () => {
+  if (!confirm("Clear all quiz answers and reset scores to 0?")) return;
+  try {
+    await ensureAuth();
+    const batch = writeBatch(db);
+    (await getDocs(collection(db,"quiz_answers"))).forEach(d => batch.delete(d.ref));
+    (await getDocs(collection(db,"quiz_participants"))).forEach(d => batch.update(d.ref,{totalScore:0}));
+    (await getDocs(collection(db,"quiz_questions"))).forEach(d => batch.update(d.ref,{used:false}));
+    await batch.commit();
+    await setDoc(doc(db,"state","quiz"),{status:"idle",currentQuestionId:null,batchNumber:0});
+    toast("Quiz scores cleared.");
+  } catch(e) { toast("Failed: "+e.message); }
+});
+
+document.getElementById("clearAllAttendeesBtn").addEventListener("click", async () => {
+  if (!confirm("Delete ALL attendees, pairs, votes, answers, and lucky draw history?")) return;
+  if (!confirm("FINAL WARNING — this cannot be undone. Proceed?")) return;
+  try {
+    await ensureAuth();
+    const batch = writeBatch(db);
+    const cols = ["attendees","karaoke_participants","karaoke_pairs","karaoke_votes","karaoke_songs","quiz_participants","quiz_answers","lucky_draw_winners"];
+    for (const col of cols) (await getDocs(collection(db,col))).forEach(d => batch.delete(d.ref));
+    (await getDocs(collection(db,"quiz_questions"))).forEach(d => batch.update(d.ref,{used:false}));
+    await batch.commit();
+    await setDoc(doc(db,"state","display"),{mode:"idle"});
+    await setDoc(doc(db,"state","lucky_draw"),{status:"idle"});
+    await setDoc(doc(db,"state","karaoke"),{phase:"lobby"});
+    await setDoc(doc(db,"state","quiz"),{status:"idle",currentQuestionId:null,batchNumber:0});
+    toast("All event data cleared. Fresh start.");
+  } catch(e) { toast("Failed: "+e.message); console.error(e); }
 });
 
 // ── Live status watcher ──
