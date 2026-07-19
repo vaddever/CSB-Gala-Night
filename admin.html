@@ -148,8 +148,9 @@
       <div class="card">
         <div class="section-title">
           <div class="eyebrow">All attendees</div>
-          <div class="row" style="max-width: 420px;">
+          <div class="row" style="max-width: 460px;">
             <input type="text" id="attendeeSearch" placeholder="Search name or staff ID…" />
+            <button class="btn btn-ghost" id="refreshAttendeesBtn" style="flex:0 0 auto;" title="Refresh data">↺</button>
             <button class="btn btn-ghost" id="exportCsvBtn" style="flex:0 0 auto;">Export CSV</button>
           </div>
         </div>
@@ -454,9 +455,13 @@ function toast(msg) {
   setTimeout(() => t.classList.remove("show"), 2400);
 }
 async function ensureAuth() {
-  return new Promise(resolve => {
-    onAuthStateChanged(auth, user => { if (user) resolve(user); else signInAnonymously(auth).catch(console.error); });
-  });
+  if (auth.currentUser) return auth.currentUser;
+  try {
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  } catch(e) {
+    throw new Error("Anonymous Authentication failed — make sure it is enabled in your Firebase console under Authentication → Sign-in method. Details: " + e.message);
+  }
 }
 
 /* ===================== PIN gate ===================== */
@@ -495,7 +500,6 @@ document.getElementById("showQrBtn").addEventListener("click", () => {
   document.getElementById("entranceUrl").textContent = url;
   const el = document.getElementById("entranceQr");
   el.innerHTML = "";
-  // eslint-disable-next-line no-undef
   new QRCode(el, { text: url, width: 220, height: 220, colorDark: "#0b0e14", colorLight: "#ffffff" });
   document.getElementById("qrModal").classList.add("show");
 });
@@ -508,13 +512,25 @@ let booted = false;
 async function boot() {
   if (booted) return;
   booted = true;
-  await ensureAuth();
-  watchAttendees();
-  watchDraw();
-  watchKaraoke();
-  watchQuiz();
-  watchAwards();
-  watchConfig();
+  try {
+    await ensureAuth();
+    watchAttendees();
+    watchDraw();
+    watchKaraoke();
+    watchQuiz();
+    watchAwards();
+    watchConfig();
+  } catch(e) {
+    // Show error prominently so it's not silent
+    const msg = e.message || String(e);
+    toast("❌ " + msg);
+    document.getElementById("attendeeRows").innerHTML =
+      `<tr><td colspan="6" style="color:var(--red); font-size:12px; padding:12px;">
+        ⚠️ ${msg}<br><br>
+        Check: (1) Anonymous Auth enabled in Firebase console, (2) firebase-config.js has correct values, (3) Firestore security rules published.
+      </td></tr>`;
+    console.error("boot() failed:", e);
+  }
 }
 
 /* ===================== ATTENDEES ===================== */
@@ -522,27 +538,52 @@ let allAttendees = [];
 let karaokeIdSet = new Set();
 let quizIdSet = new Set();
 
+async function manualRefreshAttendees() {
+  try {
+    const [aSnap, kSnap, qSnap] = await Promise.all([
+      getDocs(collection(db, "attendees")),
+      getDocs(collection(db, "karaoke_participants")),
+      getDocs(collection(db, "quiz_participants")),
+    ]);
+    allAttendees = [];
+    aSnap.forEach(d => allAttendees.push({ id: d.id, ...d.data() }));
+    allAttendees.sort((a, b) => (b.registeredAt?.toMillis?.() || 0) - (a.registeredAt?.toMillis?.() || 0));
+    karaokeIdSet = new Set(); kSnap.forEach(d => karaokeIdSet.add(d.id));
+    quizIdSet = new Set(); qSnap.forEach(d => quizIdSet.add(d.id));
+    document.getElementById("statKaraoke").textContent = kSnap.size;
+    document.getElementById("statQuiz").textContent = qSnap.size;
+    renderAttendeeTable();
+    toast("✅ Refreshed — " + allAttendees.length + " attendee(s).");
+  } catch(e) {
+    toast("❌ Refresh failed: " + e.message);
+  }
+}
+
 function watchAttendees() {
   onSnapshot(collection(db, "attendees"), snap => {
     allAttendees = [];
     snap.forEach(d => allAttendees.push({ id: d.id, ...d.data() }));
     allAttendees.sort((a, b) => (b.registeredAt?.toMillis?.() || 0) - (a.registeredAt?.toMillis?.() || 0));
     renderAttendeeTable();
-  }, err => console.error("attendees listener:", err));
+  }, err => {
+    toast("⚠️ Attendees: " + err.message);
+    document.getElementById("attendeeRows").innerHTML =
+      `<tr><td colspan="6" style="color:var(--red); font-size:12px;">Firestore error: ${err.message}. Check security rules.</td></tr>`;
+  });
 
   onSnapshot(collection(db, "karaoke_participants"), snap => {
     document.getElementById("statKaraoke").textContent = snap.size;
     karaokeIdSet = new Set();
     snap.forEach(d => karaokeIdSet.add(d.id));
     renderAttendeeTable();
-  }, err => console.error("karaoke_participants listener:", err));
+  }, err => console.warn("karaoke_participants:", err.code));
 
   onSnapshot(collection(db, "quiz_participants"), snap => {
     document.getElementById("statQuiz").textContent = snap.size;
     quizIdSet = new Set();
     snap.forEach(d => quizIdSet.add(d.id));
     renderAttendeeTable();
-  }, err => console.error("quiz_participants listener:", err));
+  }, err => console.warn("quiz_participants:", err.code));
 }
 
 function renderAttendeeTable() {
@@ -568,6 +609,10 @@ function renderAttendeeTable() {
   `).join("");
 }
 document.getElementById("attendeeSearch").addEventListener("input", renderAttendeeTable);
+document.getElementById("refreshAttendeesBtn").addEventListener("click", async () => {
+  await ensureAuth();
+  manualRefreshAttendees();
+});
 
 document.getElementById("exportCsvBtn").addEventListener("click", () => {
   const header = "Staff ID,Name,Contact,Karaoke,Quiz,Lucky Draw Winner\n";
