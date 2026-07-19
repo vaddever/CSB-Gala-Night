@@ -295,22 +295,12 @@
         <div class="card">
           <!-- Source sub-tabs -->
           <div class="row" style="margin-bottom:18px; gap:6px;">
-            <button class="btn sub-tab active" id="awardsTabPortal" style="font-size:13px; padding:8px 14px;">From voting portal</button>
-            <button class="btn sub-tab" id="awardsTabManual" style="font-size:13px; padding:8px 14px;">Add manually</button>
+            <button class="btn sub-tab active" id="awardsTabManual" style="font-size:13px; padding:8px 14px;">Add manually</button>
+            <button class="btn sub-tab" id="awardsTabPortal" style="font-size:13px; padding:8px 14px;">From voting portal</button>
           </div>
 
-          <!-- Portal section -->
-          <div id="awardsSectionPortal">
-            <label for="gasUrl">Voting portal GAS URL</label>
-            <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/…/exec" />
-            <label for="gasYear" style="margin-top:12px;">Filter by year (optional)</label>
-            <input type="text" id="gasYear" placeholder="e.g. 2026" style="max-width:140px;" />
-            <button class="btn btn-teal btn-block" id="fetchWinnersBtn" style="margin-top:16px;">Fetch winners from portal</button>
-            <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:10px; min-height:1em;"></p>
-          </div>
-
-          <!-- Manual section -->
-          <div id="awardsSectionManual" style="display:none;">
+          <!-- Manual section (default) -->
+          <div id="awardsSectionManual">
             <div class="row" style="gap:8px;">
               <input type="text" id="manualAwardName" placeholder="Award name e.g. Best Employee" />
               <button class="btn btn-teal" id="addManualAwardBtn" style="flex:0 0 auto; white-space:nowrap;">+ Add award</button>
@@ -318,7 +308,17 @@
             <div id="manualAwardsList" style="margin-top:14px; max-height:380px; overflow-y:auto;">
               <p class="muted" style="font-size:13px;">No awards added yet.</p>
             </div>
-            <button class="btn btn-teal btn-block" id="useManualAwardsBtn" style="margin-top:14px; display:none;">Use these awards →</button>
+            <button class="btn btn-teal btn-block" id="useManualAwardsBtn" style="margin-top:14px; display:none;">Push to display screen →</button>
+          </div>
+
+          <!-- Portal section (hidden by default) -->
+          <div id="awardsSectionPortal" style="display:none;">
+            <label for="gasUrl">Voting portal GAS URL</label>
+            <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/…/exec" />
+            <label for="gasYear" style="margin-top:12px;">Filter by year (optional)</label>
+            <input type="text" id="gasYear" placeholder="e.g. 2026" style="max-width:140px;" />
+            <button class="btn btn-teal btn-block" id="fetchWinnersBtn" style="margin-top:16px;">Fetch winners from portal</button>
+            <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:10px; min-height:1em;"></p>
           </div>
         </div>
 
@@ -1019,17 +1019,17 @@ document.getElementById("resetQuizScoresBtn").addEventListener("click", async ()
 let fetchedCategories = [];
 
 // ── Source sub-tab toggle ──
-document.getElementById("awardsTabPortal").addEventListener("click", () => {
-  document.getElementById("awardsTabPortal").classList.add("active");
-  document.getElementById("awardsTabManual").classList.remove("active");
-  document.getElementById("awardsSectionPortal").style.display = "";
-  document.getElementById("awardsSectionManual").style.display = "none";
-});
 document.getElementById("awardsTabManual").addEventListener("click", () => {
   document.getElementById("awardsTabManual").classList.add("active");
   document.getElementById("awardsTabPortal").classList.remove("active");
   document.getElementById("awardsSectionManual").style.display = "";
   document.getElementById("awardsSectionPortal").style.display = "none";
+});
+document.getElementById("awardsTabPortal").addEventListener("click", () => {
+  document.getElementById("awardsTabPortal").classList.add("active");
+  document.getElementById("awardsTabManual").classList.remove("active");
+  document.getElementById("awardsSectionPortal").style.display = "";
+  document.getElementById("awardsSectionManual").style.display = "none";
 });
 
 // ── Portal fetch ──
@@ -1074,36 +1074,19 @@ document.getElementById("manualAwardName").addEventListener("keydown", e => {
   if (e.key === "Enter") document.getElementById("addManualAwardBtn").click();
 });
 
-/* ── Image compression helper ── */
-function compressImage(file, maxPx = 320, quality = 0.75) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 function setupPhotoDropZone(el, onPhoto) {
-  el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("drag-over"); });
+  el.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); el.classList.add("drag-over"); });
   el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
   el.addEventListener("drop", async e => {
-    e.preventDefault(); el.classList.remove("drag-over");
+    e.preventDefault(); e.stopPropagation(); el.classList.remove("drag-over");
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("image/")) onPhoto(await compressImage(file));
   });
   const inp = el.querySelector("input[type=file]");
-  el.addEventListener("click", e => { if (e.target !== inp) inp.click(); });
+  el.addEventListener("click", e => {
+    e.stopPropagation(); // prevent bubbling to nominee row
+    if (e.target !== inp) inp.click();
+  });
   inp.addEventListener("change", async () => {
     if (inp.files[0]) onPhoto(await compressImage(inp.files[0]));
     inp.value = "";
@@ -1130,7 +1113,7 @@ function renderManualList() {
         </div>
       </div>
       ${award.nominees.length === 0
-        ? `<p class="muted" style="font-size:12px; margin-bottom:8px;">No nominees yet. Radio = winner selection. Drop a photo on each nominee.</p>`
+        ? `<p class="muted" style="font-size:12px; margin-bottom:8px;">No nominees yet. Radio = winner. Drop a photo on 📷.</p>`
         : award.nominees.map((n, ni) => `
           <div class="nominee-row">
             <input type="radio" name="mwinner_${award.id}" value="${ni}"
@@ -1139,15 +1122,18 @@ function renderManualList() {
               style="width:auto; flex:0 0 auto; cursor:pointer;" />
             ${n.photoBase64
               ? `<img src="${n.photoBase64}" class="nominee-photo-preview" style="display:inline-block;" />`
-              : `<div class="photo-drop" data-drop-ai="${ai}" data-drop-ni="${ni}" title="Drop photo"><input type="file" accept="image/*" />📷</div>`}
+              : `<div class="photo-drop" data-drop-ai="${ai}" data-drop-ni="${ni}" title="Drop photo or click"><input type="file" accept="image/*" />📷</div>`
+            }
             <span style="flex:1; font-size:14px;">${escapeHtml(n.name)}${n.dept ? ` <span class="muted" style="font-size:12px;">(${escapeHtml(n.dept)})</span>` : ""}</span>
-            ${n.photoBase64 ? `<button class="btn btn-ghost" data-clearphoto-ai="${ai}" data-clearphoto-ni="${ni}" style="font-size:11px;padding:3px 7px;">✕ photo</button>` : ""}
+            <span class="mono muted" style="font-size:12px; flex:0 0 auto;">${n.votes ? n.votes + " votes" : ""}</span>
+            ${n.photoBase64 ? `<button class="btn btn-ghost" data-clearphoto-ai="${ai}" data-clearphoto-ni="${ni}" style="font-size:11px;padding:3px 7px;">✕</button>` : ""}
             <button class="btn btn-ghost" data-mdelnom="${ni}" data-mdelnom-award="${ai}" style="font-size:11px; padding:4px 8px; color:var(--red);">× remove</button>
           </div>`).join("")
       }
       <div class="row" style="margin-top:10px; gap:6px;">
-        <input type="text" placeholder="Nominee name" class="mn-name" data-mn-ai="${ai}" style="flex:2; font-size:13px;" />
-        <input type="text" placeholder="Dept (opt)" class="mn-dept" data-mn-ai="${ai}" style="flex:1; min-width:80px; font-size:13px;" />
+        <input type="text" placeholder="Nominee name" class="mn-name" data-mn-ai="${ai}" style="flex:3; font-size:13px;" />
+        <input type="text" placeholder="Dept (opt)" class="mn-dept" data-mn-ai="${ai}" style="flex:1.5; min-width:70px; font-size:13px;" />
+        <input type="number" placeholder="Votes" class="mn-votes" data-mn-ai="${ai}" min="0" style="flex:1; min-width:60px; font-size:13px;" />
         <button class="btn btn-teal" data-maddnom="${ai}" style="font-size:12px; padding:7px 11px; flex:0 0 auto;">+ Add</button>
       </div>
     </div>`).join("");
@@ -1168,7 +1154,8 @@ function renderManualList() {
   }));
 
   // Delete nominee
-  wrap.querySelectorAll("[data-mdelnom]").forEach(b => b.addEventListener("click", () => {
+  wrap.querySelectorAll("[data-mdelnom]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
     const ai = Number(b.dataset.mdelnomAward), ni = Number(b.dataset.mdelnom);
     const removedId = manualAwards[ai].nominees[ni]?.id;
     manualAwards[ai].nominees.splice(ni, 1);
@@ -1177,7 +1164,8 @@ function renderManualList() {
   }));
 
   // Clear photo
-  wrap.querySelectorAll("[data-clearphoto-ai]").forEach(b => b.addEventListener("click", () => {
+  wrap.querySelectorAll("[data-clearphoto-ai]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
     manualAwards[Number(b.dataset.clearphotoAi)].nominees[Number(b.dataset.clearphotoNi)].photoBase64 = null;
     renderManualList();
   }));
@@ -1197,15 +1185,23 @@ function renderManualList() {
   });
 
   // Add nominee
-  wrap.querySelectorAll("[data-maddnom]").forEach(b => b.addEventListener("click", () => {
+  wrap.querySelectorAll("[data-maddnom]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
     const ai = Number(b.dataset.maddnom);
-    const nameEl = wrap.querySelector(`.mn-name[data-mn-ai="${ai}"]`);
-    const deptEl = wrap.querySelector(`.mn-dept[data-mn-ai="${ai}"]`);
+    const nameEl  = wrap.querySelector(`.mn-name[data-mn-ai="${ai}"]`);
+    const deptEl  = wrap.querySelector(`.mn-dept[data-mn-ai="${ai}"]`);
+    const votesEl = wrap.querySelector(`.mn-votes[data-mn-ai="${ai}"]`);
     const name = nameEl.value.trim(); if (!name) return;
     const id = "n_" + Date.now() + "_" + ai;
-    manualAwards[ai].nominees.push({ id, name, dept: deptEl.value.trim(), unit: "", photoBase64: null });
+    manualAwards[ai].nominees.push({
+      id, name,
+      dept: deptEl.value.trim(),
+      unit: "",
+      votes: Number(votesEl.value) || 0,
+      photoBase64: null
+    });
     if (!manualAwards[ai].winnerId) manualAwards[ai].winnerId = id;
-    nameEl.value = ""; deptEl.value = "";
+    nameEl.value = ""; deptEl.value = ""; votesEl.value = "";
     renderManualList();
   }));
 
@@ -1215,19 +1211,50 @@ function renderManualList() {
   }));
 }
 
-document.getElementById("useManualAwardsBtn").addEventListener("click", () => {
+/* ── Image compression helper ── */
+async function compressImage(file, maxPx = 320, quality = 0.75) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+
+document.getElementById("useManualAwardsBtn").addEventListener("click", async () => {
   if (manualAwards.length === 0) { toast("Add at least one award first."); return; }
   fetchedCategories = manualAwards.map(a => {
-    const winner = a.nominees.find(n => n.id === a.winnerId) || a.nominees[0] || null;
-    const nominees = a.nominees.map(n => ({ ...n, votes: n.id === (winner && winner.id) ? 1 : 0 }));
-    return { id: a.id, name: a.name, scope: "", year: "", winner: winner ? { ...winner, votes: 1 } : null, nominees, totalVotes: winner ? 1 : 0 };
+    const totalVotes = a.nominees.reduce((s, n) => s + (n.votes || 0), 0);
+    // Winner = manually selected radio, or highest votes, or first nominee
+    let winner = a.nominees.find(n => n.id === a.winnerId);
+    if (!winner && a.nominees.length > 0) {
+      winner = [...a.nominees].sort((x, y) => (y.votes || 0) - (x.votes || 0))[0];
+    }
+    return {
+      id: a.id, name: a.name, scope: "", year: "",
+      winner: winner ? { ...winner } : null,
+      nominees: a.nominees,
+      totalVotes
+    };
   });
+  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categories: fetchedCategories });
+  await setDisplayMode("awards");
   renderAwardsPreview(fetchedCategories);
   document.getElementById("pushToDisplayBtn").style.display = "";
-  toast(`${fetchedCategories.length} award${fetchedCategories.length === 1 ? "" : "s"} ready — push to display when ready.`);
+  toast(`${fetchedCategories.length} award${fetchedCategories.length === 1 ? "" : "s"} pushed to display screen.`);
 });
 
-// ── Shared preview table ──
 function renderAwardsPreview(categories) {
   const wrap = document.getElementById("awardsPreview");
   if (!categories || categories.length === 0) {
@@ -1235,17 +1262,21 @@ function renderAwardsPreview(categories) {
   }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>#</th><th>Award</th><th>Winner</th><th>Dept / Unit</th><th>Votes</th><th>All nominees</th></tr></thead>
+      <thead><tr><th>#</th><th>Award</th><th>Winner</th><th>Dept</th><th>Votes</th><th>All nominees</th></tr></thead>
       <tbody>${categories.map((c, i) => {
         const w = c.winner;
         const dept = w ? [w.dept, w.unit].filter(Boolean).join(" · ") : "—";
+        const totalVotes = c.totalVotes || c.nominees?.reduce((s,n)=>s+(n.votes||0),0) || 0;
         return `<tr>
           <td class="mono">${i + 1}</td>
           <td>${escapeHtml(c.name)}</td>
-          <td style="color:var(--teal);">${w ? escapeHtml(w.name) : '<span class="muted">No winner set</span>'}</td>
+          <td style="color:var(--teal);">
+            ${w?.photoBase64 ? `<img src="${w.photoBase64}" style="width:28px;height:28px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:6px;" />` : ""}
+            ${w ? escapeHtml(w.name) : '<span class="muted">No winner set</span>'}
+          </td>
           <td class="muted">${escapeHtml(dept)}</td>
-          <td class="mono">${w ? w.votes : 0} / ${c.totalVotes}</td>
-          <td class="muted" style="font-size:12px;">${c.nominees.map(n => escapeHtml(n.name)).join(", ")}</td>
+          <td class="mono">${w?.votes ?? "—"} / ${totalVotes}</td>
+          <td class="muted" style="font-size:12px;">${(c.nominees||[]).map(n => escapeHtml(n.name) + (n.votes ? ` (${n.votes})` : "")).join(", ")}</td>
         </tr>`;
       }).join("")}</tbody>
     </table>`;

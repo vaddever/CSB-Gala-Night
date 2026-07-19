@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="firebase-config.js"></script>
+<!-- onYouTubeIframeAPIReady MUST be in a plain script before the API loads.
+     module scripts are deferred so they'd be too late to catch the callback. -->
+<script>window.onYouTubeIframeAPIReady = function() { window._ytApiReady = true; };</script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <style>
   html, body { height: 100%; overflow: hidden; }
@@ -302,41 +305,43 @@ function renderDraw(s) {
 
 /* ===================== YouTube player ===================== */
 let ytPlayer = null;
-let ytReady = false;
 let ytPendingPlay = false;
 let ytCurrentVideoId = null;
-
-window.onYouTubeIframeAPIReady = function() { ytReady = true; };
+// ytReady is tracked via window._ytApiReady (set in plain script before module loads)
 
 function loadYouTubePlayer(videoId, shouldPlay) {
   const wrap = document.getElementById("yt-player-wrap");
   wrap.style.display = "flex";
 
+  // Already loaded with same video — just control playback
   if (ytPlayer && ytCurrentVideoId === videoId) {
-    if (shouldPlay) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
+    try { if (shouldPlay) ytPlayer.playVideo(); else ytPlayer.pauseVideo(); } catch(e) {}
     return;
   }
 
   ytPendingPlay = shouldPlay;
   ytCurrentVideoId = videoId;
 
+  // Player exists but different video — swap it
   if (ytPlayer) {
-    ytPlayer.loadVideoById(videoId);
+    try { ytPlayer.loadVideoById(videoId); } catch(e) {}
     return;
   }
 
-  if (!ytReady) { setTimeout(() => loadYouTubePlayer(videoId, shouldPlay), 400); return; }
+  // API not ready yet — retry
+  if (!window._ytApiReady) {
+    setTimeout(() => loadYouTubePlayer(videoId, shouldPlay), 300);
+    return;
+  }
 
+  // Create fresh player
   ytPlayer = new YT.Player("yt-player", {
     videoId,
     width: "100%", height: "100%",
-    playerVars: { controls: 0, rel: 0, modestbranding: 1, showinfo: 0 },
+    playerVars: { controls: 1, rel: 0, modestbranding: 1 },
     events: {
       onReady: () => { if (ytPendingPlay) ytPlayer.playVideo(); else ytPlayer.pauseVideo(); },
-      onStateChange: ev => {
-        // If video finished, pause at end
-        if (ev.data === YT.PlayerState.ENDED) ytPlayer.seekTo(0);
-      }
+      onStateChange: ev => { if (ev.data === YT.PlayerState.ENDED) ytPlayer.seekTo(0); }
     }
   });
 }
