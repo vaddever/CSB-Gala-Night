@@ -504,31 +504,25 @@ async function renderQuiz(s) {
 let lastAwardsStatus = null;
 let lastAwardsIndex = -1;
 let awardsShuffleInterval = null;
+let awardsCurrentCatId = null;
 
 function startNomineePhotoShuffle(nominees) {
   if (awardsShuffleInterval) { clearInterval(awardsShuffleInterval); awardsShuffleInterval = null; }
-  const photos = nominees.filter(n => n.photoBase64);
+  const photos = (nominees || []).filter(n => n.photoBase64);
   const photoEl = document.getElementById("awardsShufflePhoto");
   const nameEl  = document.getElementById("awardsShuffleName");
   const wrap    = document.getElementById("awardsPhotoWrap");
 
   if (photos.length === 0) { wrap.style.display = "none"; return; }
-
   wrap.style.display = "flex";
+  photoEl.style.transition = "opacity 0.08s";
   let idx = 0;
   const showNext = () => {
     photoEl.style.opacity = 0;
-    setTimeout(() => {
-      photoEl.src = photos[idx].photoBase64;
-      nameEl.textContent = photos[idx].name;
-      photoEl.style.opacity = 1;
-      idx = (idx + 1) % photos.length;
-    }, 80);
+    setTimeout(() => { photoEl.src = photos[idx].photoBase64; nameEl.textContent = photos[idx].name; photoEl.style.opacity = 1; idx = (idx+1) % photos.length; }, 80);
   };
-  // Start fast, no transition initially
-  photoEl.style.transition = "opacity 0.08s";
   showNext();
-  awardsShuffleInterval = setInterval(showNext, 280);
+  awardsShuffleInterval = setInterval(showNext, 260);
 }
 
 function stopNomineePhotoShuffle() {
@@ -537,25 +531,25 @@ function stopNomineePhotoShuffle() {
 
 function renderAwards(s) {
   showScreen("scr-awards");
-  const eyebrow          = document.getElementById("awardsEyebrow");
-  const categoryEl       = document.getElementById("awardCategory");
-  const teaserEl         = document.getElementById("awardTeaser");
-  const photoWrap        = document.getElementById("awardsPhotoWrap");
-  const winnerPhotoWrap  = document.getElementById("awardsWinnerPhotoWrap");
-  const winnerPhotoEl    = document.getElementById("awardsWinnerPhoto");
-  const winnerNameEl     = document.getElementById("awardWinnerName");
-  const winnerDeptEl     = document.getElementById("awardWinnerDept");
-  const winnerVotesEl    = document.getElementById("awardWinnerVotes");
-  const finalListEl      = document.getElementById("awardsFinalList");
+  const eyebrow         = document.getElementById("awardsEyebrow");
+  const categoryEl      = document.getElementById("awardCategory");
+  const teaserEl        = document.getElementById("awardTeaser");
+  const photoWrap       = document.getElementById("awardsPhotoWrap");
+  const winnerPhotoWrap = document.getElementById("awardsWinnerPhotoWrap");
+  const winnerNameEl    = document.getElementById("awardWinnerName");
+  const winnerDeptEl    = document.getElementById("awardWinnerDept");
+  const winnerVotesEl   = document.getElementById("awardWinnerVotes");
+  const finalListEl     = document.getElementById("awardsFinalList");
 
   const hide = (...els) => els.forEach(e => { e.style.display = "none"; });
-  const show = (el, d="") => el.style.display = d;
+  const show = (el, d="") => { el.style.display = d; };
 
-  const categories = s.categories || [];
-  const idx = s.currentIndex || 0;
-  const cat = categories[idx];
+  const catIds    = s.categoryIds || [];
+  const total     = s.totalCategories || catIds.length;
+  const idx       = s.currentIndex || 0;
+  const catId     = catIds[idx];
 
-  // Reset every render
+  // Reset layout every render
   hide(teaserEl, photoWrap, winnerPhotoWrap, winnerNameEl, winnerDeptEl, winnerVotesEl, finalListEl);
   show(categoryEl);
 
@@ -566,58 +560,100 @@ function renderAwards(s) {
     return;
   }
 
-  if (s.status === "category" && cat) {
-    eyebrow.textContent = `STAFF AWARDS · ${idx + 1} OF ${categories.length}`;
-    categoryEl.textContent = cat.name;
+  if (s.status === "category" && catId) {
+    eyebrow.textContent = `STAFF AWARDS · ${idx+1} OF ${total}`;
+    categoryEl.textContent = "Loading…";
     show(teaserEl);
 
-    // Shuffle nominee photos — only restart if we moved to a new category
-    if (lastAwardsIndex !== idx) {
-      startNomineePhotoShuffle(cat.nominees || []);
+    // Only re-fetch when category actually changes
+    if (awardsCurrentCatId !== catId) {
+      awardsCurrentCatId = catId;
+      getDoc(doc(db, "award_cats", catId)).then(catSnap => {
+        if (!catSnap.exists()) return;
+        const cat = catSnap.data();
+        categoryEl.textContent = cat.name;
+        startNomineePhotoShuffle(cat.nominees || []);
+      });
     }
     return;
   }
 
-  if (s.status === "revealed" && cat) {
+  if (s.status === "revealed" && catId) {
     stopNomineePhotoShuffle();
-    const w = cat.winner;
-    eyebrow.textContent = `🏆  ${cat.name}`;
-    hide(categoryEl, teaserEl);
+    awardsCurrentCatId = null; // reset so next category re-fetches
+    hide(categoryEl, teaserEl, photoWrap);
 
-    if (w && w.photoBase64) {
-      // Re-trigger animation by replacing src
-      winnerPhotoEl.style.animation = "none";
-      winnerPhotoEl.src = w.photoBase64;
-      winnerPhotoEl.offsetHeight; // reflow
-      winnerPhotoEl.style.animation = "";
-      show(winnerPhotoWrap, "flex");
-    }
+    getDoc(doc(db, "award_cats", catId)).then(catSnap => {
+      if (!catSnap.exists()) return;
+      const cat = catSnap.data();
+      const winners = cat.winners?.length ? cat.winners : (cat.presetWinner ? [cat.presetWinner] : []);
 
-    if (w) {
-      winnerNameEl.textContent = w.name;
-      winnerDeptEl.textContent = [w.dept, w.unit].filter(Boolean).join("  ·  ");
-      if (w.votes) winnerVotesEl.textContent = `${w.votes} vote${w.votes === 1 ? "" : "s"}`;
-      show(winnerNameEl); show(winnerDeptEl); if (w.votes) show(winnerVotesEl);
-    }
-    if (lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx) burstConfetti();
+      eyebrow.textContent = `🏆  ${cat.name}`;
+
+      if (winners.length === 0) return;
+
+      // Build winner display: photo(s) + name(s)
+      const winnerContainer = document.getElementById("awardsWinnerPhotoWrap");
+      winnerContainer.innerHTML = "";
+
+      winners.forEach(w => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex; flex-direction:column; align-items:center; margin:0 1.5vw;";
+        if (w.photoBase64) {
+          const img = document.createElement("img");
+          img.src = w.photoBase64;
+          img.style.cssText = `width:${winners.length > 1 ? "16" : "26"}vw; height:${winners.length > 1 ? "16" : "26"}vw; object-fit:cover; border-radius:50%; border:0.4vw solid var(--teal); box-shadow:0 0 6vw rgba(54,214,197,0.5); animation:photoIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both;`;
+          wrap.appendChild(img);
+        }
+        const namEl = document.createElement("div");
+        namEl.style.cssText = `font-family:var(--font-display); font-size:${winners.length > 1 ? "3" : "5"}vw; color:var(--teal); margin-top:1vw; text-shadow:0 0 4vw rgba(54,214,197,0.5);`;
+        namEl.textContent = w.name;
+        wrap.appendChild(namEl);
+        if (w.dept) {
+          const deptEl2 = document.createElement("div");
+          deptEl2.style.cssText = "font-size:1.5vw; color:var(--text-muted); margin-top:0.4vw;";
+          deptEl2.textContent = w.dept;
+          wrap.appendChild(deptEl2);
+        }
+        winnerContainer.appendChild(wrap);
+      });
+
+      winnerContainer.style.cssText = "display:flex; flex-direction:row; align-items:flex-start; justify-content:center; flex-wrap:wrap; gap:1vw; margin-top:1.5vw;";
+
+      if (lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx) burstConfetti();
+    });
+    lastAwardsStatus = s.status;
+    lastAwardsIndex = idx;
+    return;
   }
 
   if (s.status === "finished") {
     stopNomineePhotoShuffle();
-    eyebrow.textContent = "STAFF AWARDS 2026";
+    eyebrow.textContent = "STAFF AWARDS";
     categoryEl.textContent = "Thank You, Everyone!";
     show(finalListEl);
-    finalListEl.innerHTML = "";
-    categories.forEach(c => {
-      if (!c.winner) return;
-      const li = document.createElement("li");
-      li.innerHTML = `
-        ${c.winner.photoBase64 ? `<img class="a-thumb" src="${c.winner.photoBase64}" alt="" />` : ""}
-        <span class="acat">${c.name}</span>
-        <span class="awin">${c.winner.name}</span>`;
-      finalListEl.appendChild(li);
+    finalListEl.innerHTML = `<li style="justify-content:center; color:var(--text-muted); font-size:1.4vw; border:none;">Loading…</li>`;
+
+    // Fetch all categories
+    Promise.all(catIds.map(id => getDoc(doc(db, "award_cats", id)))).then(snaps => {
+      finalListEl.innerHTML = "";
+      snaps.sort((a,b) => (a.data()?.order||0) - (b.data()?.order||0)).forEach(cs => {
+        if (!cs.exists()) return;
+        const c = cs.data();
+        const winners = c.winners?.length ? c.winners : (c.presetWinner ? [c.presetWinner] : []);
+        if (!winners.length) return;
+        const li = document.createElement("li");
+        li.innerHTML = `
+          ${winners[0]?.photoBase64 ? `<img class="a-thumb" src="${winners[0].photoBase64}" alt="" />` : ""}
+          <span class="acat">${c.name}</span>
+          <span class="awin">${winners.map(w=>w.name).join(" & ")}</span>`;
+        finalListEl.appendChild(li);
+      });
     });
     if (lastAwardsStatus !== "finished") burstConfetti();
+    lastAwardsStatus = s.status;
+    lastAwardsIndex = idx;
+    return;
   }
 
   lastAwardsStatus = s.status;
@@ -639,9 +675,12 @@ async function setup() {
     } else if (mode === "quiz") {
       activeModeUnsub = onSnapshot(doc(db, "state", "quiz"), s => { if (s.exists()) renderQuiz(s.data()); });
     } else if (mode === "awards") {
-      activeModeUnsub = onSnapshot(doc(db, "state", "awards"), s => { if (s.exists()) renderAwards(s.data()); else showScreen("scr-awards"); });
+      activeModeUnsub = onSnapshot(doc(db, "state", "awards"), s => {
+        if (s.exists()) renderAwards(s.data());
+        else { stopNomineePhotoShuffle(); showScreen("scr-awards"); }
+      });
     } else {
-      stopShuffle();
+      stopShuffle(); stopNomineePhotoShuffle(); hideYouTubePlayer();
       showScreen("scr-idle");
     }
   });

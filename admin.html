@@ -674,14 +674,24 @@ document.getElementById("songYoutubeUrl").addEventListener("input", function() {
 
 document.getElementById("addSongBtn").addEventListener("click", async () => {
   const title = document.getElementById("songInput").value.trim();
-  if (!title) return;
-  const ytUrl = document.getElementById("songYoutubeUrl").value.trim();
-  const videoId = extractYouTubeId(ytUrl) || null;
-  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
-  await addDoc(collection(db, "karaoke_songs"), { title, videoId, thumbnailUrl, assigned: false, createdAt: serverTimestamp() });
-  document.getElementById("songInput").value = "";
-  document.getElementById("songYoutubeUrl").value = "";
-  document.getElementById("songThumbPreview").style.display = "none";
+  if (!title) { toast("Enter a song title first."); return; }
+  const btn = document.getElementById("addSongBtn");
+  btn.disabled = true;
+  try {
+    const ytUrl = document.getElementById("songYoutubeUrl").value.trim();
+    const videoId = extractYouTubeId(ytUrl) || null;
+    const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+    await addDoc(collection(db, "karaoke_songs"), { title, videoId, thumbnailUrl, assigned: false, createdAt: serverTimestamp() });
+    document.getElementById("songInput").value = "";
+    document.getElementById("songYoutubeUrl").value = "";
+    document.getElementById("songThumbPreview").style.display = "none";
+    toast("✅ Song saved: " + title);
+  } catch(e) {
+    toast("❌ Save failed: " + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 function renderSongRows() {
@@ -1060,19 +1070,52 @@ document.getElementById("fetchWinnersBtn").addEventListener("click", async () =>
 });
 
 // ── Manual entry ──
-let manualAwards = []; // [{id, name, nominees:[{id,name,dept,unit}], winnerId}]
+let manualAwards = [];
+
+// Persist awards across refreshes
+function saveAwards() {
+  try { localStorage.setItem("csb_awards_v2", JSON.stringify(manualAwards)); } catch(e) {}
+}
+(function loadAwards() {
+  try {
+    const s = localStorage.getItem("csb_awards_v2");
+    if (s) manualAwards = JSON.parse(s);
+  } catch(e) {}
+  if (manualAwards.length) renderManualList();
+})();
 
 document.getElementById("addManualAwardBtn").addEventListener("click", () => {
   const input = document.getElementById("manualAwardName");
   const name = input.value.trim();
   if (!name) return;
-  manualAwards.push({ id: "ma_" + Date.now(), name, nominees: [], winnerId: null });
+  manualAwards.push({ id: "ma_" + Date.now(), name, nominees: [], winnerId: null, revealed: false, winners: [] });
   input.value = "";
+  saveAwards();
   renderManualList();
 });
 document.getElementById("manualAwardName").addEventListener("keydown", e => {
   if (e.key === "Enter") document.getElementById("addManualAwardBtn").click();
 });
+
+/* ── Image compression helper ── */
+async function compressImage(file, maxPx = 320, quality = 0.75) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function setupPhotoDropZone(el, onPhoto) {
   el.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); el.classList.add("drag-over"); });
@@ -1083,10 +1126,7 @@ function setupPhotoDropZone(el, onPhoto) {
     if (file && file.type.startsWith("image/")) onPhoto(await compressImage(file));
   });
   const inp = el.querySelector("input[type=file]");
-  el.addEventListener("click", e => {
-    e.stopPropagation(); // prevent bubbling to nominee row
-    if (e.target !== inp) inp.click();
-  });
+  el.addEventListener("click", e => { e.stopPropagation(); if (e.target !== inp) inp.click(); });
   inp.addEventListener("change", async () => {
     if (inp.files[0]) onPhoto(await compressImage(inp.files[0]));
     inp.value = "";
@@ -1097,15 +1137,18 @@ function renderManualList() {
   const wrap = document.getElementById("manualAwardsList");
   const useBtn = document.getElementById("useManualAwardsBtn");
   if (manualAwards.length === 0) {
-    wrap.innerHTML = `<p class="muted" style="font-size:13px;">No awards added yet.</p>`;
+    wrap.innerHTML = `<p class="muted" style="font-size:13px;">No awards yet. Type a name above and click + Add award.</p>`;
     useBtn.style.display = "none";
     return;
   }
   useBtn.style.display = "";
   wrap.innerHTML = manualAwards.map((award, ai) => `
-    <div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+    <div style="border:1px solid ${award.revealed ? "var(--teal)" : "var(--border)"}; border-radius:10px; padding:12px 14px; margin-bottom:10px; opacity:${award.revealed ? "0.65" : "1"};">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px; flex-wrap:wrap;">
-        <strong style="font-size:15px;">${escapeHtml(award.name)}</strong>
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${award.revealed ? `<span style="color:var(--teal); font-size:16px;" title="Winner revealed">✓</span>` : `<span class="mono muted" style="font-size:11px; border:1px solid var(--border); border-radius:100px; padding:2px 8px;">pending</span>`}
+          <strong style="font-size:15px;">${escapeHtml(award.name)}</strong>
+        </div>
         <div style="display:flex; gap:5px;">
           <button class="btn btn-ghost" data-mup="${ai}" style="font-size:12px; padding:5px 8px;" ${ai===0?"disabled":""}>↑</button>
           <button class="btn btn-ghost" data-mdn="${ai}" style="font-size:12px; padding:5px 8px;" ${ai===manualAwards.length-1?"disabled":""}>↓</button>
@@ -1132,59 +1175,46 @@ function renderManualList() {
       }
       <div class="row" style="margin-top:10px; gap:6px;">
         <input type="text" placeholder="Nominee name" class="mn-name" data-mn-ai="${ai}" style="flex:3; font-size:13px;" />
-        <input type="text" placeholder="Dept (opt)" class="mn-dept" data-mn-ai="${ai}" style="flex:1.5; min-width:70px; font-size:13px;" />
-        <input type="number" placeholder="Votes" class="mn-votes" data-mn-ai="${ai}" min="0" style="flex:1; min-width:60px; font-size:13px;" />
-        <button class="btn btn-teal" data-maddnom="${ai}" style="font-size:12px; padding:7px 11px; flex:0 0 auto;">+ Add</button>
+        <input type="text" placeholder="Dept (opt)" class="mn-dept" data-mn-ai="${ai}" style="flex:1.5; min-width:60px; font-size:13px;" />
+        <input type="number" placeholder="Votes" class="mn-votes" data-mn-ai="${ai}" min="0" style="flex:1; min-width:55px; font-size:13px;" />
+        <button class="btn btn-teal" data-maddnom="${ai}" style="font-size:12px; padding:7px 10px; flex:0 0 auto;">+ Add</button>
       </div>
     </div>`).join("");
 
-  // Move up/down
   wrap.querySelectorAll("[data-mup]").forEach(b => b.addEventListener("click", () => {
     const i = Number(b.dataset.mup); if (i === 0) return;
-    [manualAwards[i-1], manualAwards[i]] = [manualAwards[i], manualAwards[i-1]]; renderManualList();
+    [manualAwards[i-1], manualAwards[i]] = [manualAwards[i], manualAwards[i-1]]; saveAwards(); renderManualList();
   }));
   wrap.querySelectorAll("[data-mdn]").forEach(b => b.addEventListener("click", () => {
     const i = Number(b.dataset.mdn); if (i >= manualAwards.length-1) return;
-    [manualAwards[i], manualAwards[i+1]] = [manualAwards[i+1], manualAwards[i]]; renderManualList();
+    [manualAwards[i], manualAwards[i+1]] = [manualAwards[i+1], manualAwards[i]]; saveAwards(); renderManualList();
   }));
-
-  // Delete award
   wrap.querySelectorAll("[data-mdelaward]").forEach(b => b.addEventListener("click", () => {
-    manualAwards.splice(Number(b.dataset.mdelaward), 1); renderManualList();
+    manualAwards.splice(Number(b.dataset.mdelaward), 1); saveAwards(); renderManualList();
   }));
-
-  // Delete nominee
   wrap.querySelectorAll("[data-mdelnom]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     const ai = Number(b.dataset.mdelnomAward), ni = Number(b.dataset.mdelnom);
     const removedId = manualAwards[ai].nominees[ni]?.id;
     manualAwards[ai].nominees.splice(ni, 1);
     if (manualAwards[ai].winnerId === removedId) manualAwards[ai].winnerId = manualAwards[ai].nominees[0]?.id || null;
-    renderManualList();
+    saveAwards(); renderManualList();
   }));
-
-  // Clear photo
   wrap.querySelectorAll("[data-clearphoto-ai]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     manualAwards[Number(b.dataset.clearphotoAi)].nominees[Number(b.dataset.clearphotoNi)].photoBase64 = null;
-    renderManualList();
+    saveAwards(); renderManualList();
   }));
-
-  // Select winner via radio
   wrap.querySelectorAll("[data-mrad-award]").forEach(r => r.addEventListener("change", () => {
-    manualAwards[Number(r.dataset.mradAward)].winnerId = r.dataset.mradNid;
+    manualAwards[Number(r.dataset.mradAward)].winnerId = r.dataset.mradNid; saveAwards();
   }));
-
-  // Photo drop zones
   wrap.querySelectorAll(".photo-drop[data-drop-ai]").forEach(dropEl => {
     const ai = Number(dropEl.dataset.dropAi), ni = Number(dropEl.dataset.dropNi);
     setupPhotoDropZone(dropEl, base64 => {
       manualAwards[ai].nominees[ni].photoBase64 = base64;
-      renderManualList();
+      saveAwards(); renderManualList();
     });
   });
-
-  // Add nominee
   wrap.querySelectorAll("[data-maddnom]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     const ai = Number(b.dataset.maddnom);
@@ -1193,125 +1223,177 @@ function renderManualList() {
     const votesEl = wrap.querySelector(`.mn-votes[data-mn-ai="${ai}"]`);
     const name = nameEl.value.trim(); if (!name) return;
     const id = "n_" + Date.now() + "_" + ai;
-    manualAwards[ai].nominees.push({
-      id, name,
-      dept: deptEl.value.trim(),
-      unit: "",
-      votes: Number(votesEl.value) || 0,
-      photoBase64: null
-    });
+    manualAwards[ai].nominees.push({ id, name, dept: deptEl.value.trim(), unit: "", votes: Number(votesEl.value) || 0, photoBase64: null });
     if (!manualAwards[ai].winnerId) manualAwards[ai].winnerId = id;
     nameEl.value = ""; deptEl.value = ""; votesEl.value = "";
-    renderManualList();
+    saveAwards(); renderManualList();
   }));
-
-  // Enter key on nominee name inputs
   wrap.querySelectorAll(".mn-name").forEach(inp => inp.addEventListener("keydown", e => {
     if (e.key === "Enter") wrap.querySelector(`[data-maddnom="${inp.dataset.mnAi}"]`)?.click();
   }));
 }
 
-/* ── Image compression helper ── */
-async function compressImage(file, maxPx = 320, quality = 0.75) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-
+// ── Push awards to Firestore (one doc per category to avoid 1MB limit) ──
 document.getElementById("useManualAwardsBtn").addEventListener("click", async () => {
   if (manualAwards.length === 0) { toast("Add at least one award first."); return; }
-  fetchedCategories = manualAwards.map(a => {
-    const totalVotes = a.nominees.reduce((s, n) => s + (n.votes || 0), 0);
-    // Winner = manually selected radio, or highest votes, or first nominee
-    let winner = a.nominees.find(n => n.id === a.winnerId);
-    if (!winner && a.nominees.length > 0) {
-      winner = [...a.nominees].sort((x, y) => (y.votes || 0) - (x.votes || 0))[0];
-    }
-    return {
-      id: a.id, name: a.name, scope: "", year: "",
-      winner: winner ? { ...winner } : null,
-      nominees: a.nominees,
-      totalVotes
-    };
-  });
-  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categories: fetchedCategories });
-  await setDisplayMode("awards");
-  renderAwardsPreview(fetchedCategories);
-  document.getElementById("pushToDisplayBtn").style.display = "";
-  toast(`${fetchedCategories.length} award${fetchedCategories.length === 1 ? "" : "s"} pushed to display screen.`);
+  const btn = document.getElementById("useManualAwardsBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    const batch = writeBatch(db);
+    const categoryIds = manualAwards.map(a => a.id);
+    manualAwards.forEach((a, order) => {
+      const totalVotes = a.nominees.reduce((s, n) => s + (n.votes || 0), 0);
+      let presetWinner = a.nominees.find(n => n.id === a.winnerId);
+      if (!presetWinner && a.nominees.length > 0) {
+        presetWinner = [...a.nominees].sort((x, y) => (y.votes||0) - (x.votes||0))[0];
+      }
+      batch.set(doc(db, "award_cats", a.id), {
+        name: a.name, nominees: a.nominees,
+        presetWinner: presetWinner || null,
+        winners: a.winners || [],
+        revealed: a.revealed || false,
+        order, totalVotes
+      });
+    });
+    await batch.commit();
+    await setDoc(doc(db, "state", "awards"), {
+      status: "idle", currentIndex: 0,
+      categoryIds, totalCategories: manualAwards.length
+    });
+    await setDisplayMode("awards");
+    toast(`✅ ${manualAwards.length} awards saved & pushed to display.`);
+  } catch(e) {
+    toast("❌ Error: " + e.message); console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Push to display screen →";
+  }
 });
 
+// ── Shared preview ──
 function renderAwardsPreview(categories) {
   const wrap = document.getElementById("awardsPreview");
   if (!categories || categories.length === 0) {
     wrap.innerHTML = `<p class="muted">No categories to preview.</p>`; return;
   }
-  wrap.innerHTML = `
-    <table>
-      <thead><tr><th>#</th><th>Award</th><th>Winner</th><th>Dept</th><th>Votes</th><th>All nominees</th></tr></thead>
-      <tbody>${categories.map((c, i) => {
-        const w = c.winner;
-        const dept = w ? [w.dept, w.unit].filter(Boolean).join(" · ") : "—";
-        const totalVotes = c.totalVotes || c.nominees?.reduce((s,n)=>s+(n.votes||0),0) || 0;
-        return `<tr>
-          <td class="mono">${i + 1}</td>
-          <td>${escapeHtml(c.name)}</td>
-          <td style="color:var(--teal);">
-            ${w?.photoBase64 ? `<img src="${w.photoBase64}" style="width:28px;height:28px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:6px;" />` : ""}
-            ${w ? escapeHtml(w.name) : '<span class="muted">No winner set</span>'}
-          </td>
-          <td class="muted">${escapeHtml(dept)}</td>
-          <td class="mono">${w?.votes ?? "—"} / ${totalVotes}</td>
-          <td class="muted" style="font-size:12px;">${(c.nominees||[]).map(n => escapeHtml(n.name) + (n.votes ? ` (${n.votes})` : "")).join(", ")}</td>
-        </tr>`;
-      }).join("")}</tbody>
-    </table>`;
+  wrap.innerHTML = `<table>
+    <thead><tr><th>#</th><th>Award</th><th>Winner(s)</th><th>Nominees & votes</th></tr></thead>
+    <tbody>${categories.map((c, i) => {
+      const winners = c.winners?.length ? c.winners : (c.presetWinner ? [c.presetWinner] : []);
+      return `<tr>
+        <td class="mono">${i+1}</td>
+        <td>${escapeHtml(c.name)}</td>
+        <td style="color:var(--teal);">${winners.map(w => `
+          ${w.photoBase64 ? `<img src="${w.photoBase64}" style="width:24px;height:24px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:4px;">` : ""}
+          ${escapeHtml(w.name)}`).join(", ") || '<span class="muted">—</span>'}</td>
+        <td class="muted" style="font-size:12px;">${(c.nominees||[]).map(n=>escapeHtml(n.name)+(n.votes?` (${n.votes})`:"")).join(", ")}</td>
+      </tr>`;
+    }).join("")}</tbody></table>`;
 }
 
-// ── Push to Firestore ──
-document.getElementById("pushToDisplayBtn").addEventListener("click", async () => {
-  if (fetchedCategories.length === 0) { toast("No awards to push — fetch or add manually first."); return; }
-  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categories: fetchedCategories });
-  await setDisplayMode("awards");
-  toast(`${fetchedCategories.length} awards loaded into display screen.`);
+// ── Portal fetch ──
+document.getElementById("awardsTabPortal").addEventListener("click", () => {
+  document.getElementById("awardsTabPortal").classList.add("active");
+  document.getElementById("awardsTabManual").classList.remove("active");
+  document.getElementById("awardsSectionPortal").style.display = "";
+  document.getElementById("awardsSectionManual").style.display = "none";
+});
+document.getElementById("awardsTabManual").addEventListener("click", () => {
+  document.getElementById("awardsTabManual").classList.add("active");
+  document.getElementById("awardsTabPortal").classList.remove("active");
+  document.getElementById("awardsSectionManual").style.display = "";
+  document.getElementById("awardsSectionPortal").style.display = "none";
+});
+
+document.getElementById("fetchWinnersBtn").addEventListener("click", async () => {
+  const gasUrl = document.getElementById("gasUrl").value.trim();
+  const gasYear = document.getElementById("gasYear").value.trim();
+  const statusEl = document.getElementById("fetchStatus");
+  if (!gasUrl) { statusEl.textContent = "Paste the voting portal GAS URL first."; return; }
+  statusEl.textContent = "Fetching…";
+  try {
+    const payload = { action: "getWinners" };
+    if (gasYear) payload.year = gasYear;
+    const resp = await fetch(gasUrl + "?data=" + encodeURIComponent(JSON.stringify(payload)));
+    const data = await resp.json();
+    if (data.status !== "ok") { statusEl.textContent = "Error: " + (data.message || "unknown"); return; }
+    const cats = data.categories || [];
+    if (!cats.length) { statusEl.textContent = "No categories found."; return; }
+    // Merge into manualAwards
+    cats.forEach(c => {
+      const existing = manualAwards.find(a => a.name === c.name);
+      if (!existing) {
+        manualAwards.push({ id: "portal_" + Date.now() + "_" + Math.random(), name: c.name,
+          nominees: (c.nominees||[]).map(n=>({id:"pn_"+Date.now()+"_"+Math.random(),name:n.name,dept:n.dept||"",votes:n.votes||0,photoBase64:null})),
+          winnerId: null, revealed: false, winners: [] });
+      }
+    });
+    saveAwards(); renderManualList();
+    statusEl.textContent = `✓ ${cats.length} categories merged into manual list.`;
+  } catch (e) {
+    statusEl.textContent = "Fetch failed: " + e.message;
+  }
 });
 
 // ── Live controls ──
 document.getElementById("awardsCeremonyBtn").addEventListener("click", async () => {
   const snap = await getDoc(doc(db, "state", "awards"));
-  if (!snap.exists() || !(snap.data().categories || []).length) {
-    toast("Push awards to the display screen first."); return;
+  if (!snap.exists() || !(snap.data().categoryIds || []).length) {
+    toast("Push awards to the display screen first (click 'Push to display screen →')."); return;
   }
-  await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: 0 });
+  // Start from first unrevealed award
+  const cats = snap.data().categoryIds || [];
+  let startIdx = 0;
+  for (let i = 0; i < cats.length; i++) {
+    const cs = await getDoc(doc(db, "award_cats", cats[i]));
+    if (cs.exists() && !cs.data().revealed) { startIdx = i; break; }
+  }
+  await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: startIdx });
   await setDisplayMode("awards");
-  toast("Ceremony started — big screen showing first award.");
+  toast("Ceremony started.");
 });
 
 document.getElementById("awardsRevealBtn").addEventListener("click", async () => {
+  const snap = await getDoc(doc(db, "state", "awards"));
+  if (!snap.exists()) return;
+  const s = snap.data();
+  const catId = (s.categoryIds || [])[s.currentIndex || 0];
+  if (!catId) return;
+  const catSnap = await getDoc(doc(db, "award_cats", catId));
+  if (!catSnap.exists()) return;
+  const cat = catSnap.data();
+
+  // Get checked nominees from the live controls checkboxes
+  const checked = [...document.querySelectorAll(".award-nominee-cb:checked")];
+  let winners;
+  if (checked.length > 0) {
+    winners = checked.map(cb => cat.nominees.find(n => n.id === cb.value)).filter(Boolean);
+  } else {
+    // Auto: highest vote count (ties = multiple winners)
+    const maxVotes = Math.max(...cat.nominees.map(n => n.votes || 0), 0);
+    winners = maxVotes > 0
+      ? cat.nominees.filter(n => (n.votes || 0) === maxVotes)
+      : (cat.presetWinner ? [cat.presetWinner] : cat.nominees.slice(0, 1));
+  }
+
+  await updateDoc(doc(db, "award_cats", catId), { winners, revealed: true });
   await updateDoc(doc(db, "state", "awards"), { status: "revealed" });
+
+  // Update local state
+  const ai = manualAwards.findIndex(a => a.id === catId);
+  if (ai >= 0) { manualAwards[ai].winners = winners; manualAwards[ai].revealed = true; saveAwards(); renderManualList(); }
+  toast("🏆 " + winners.map(w => w.name).join(" & "));
 });
 
 document.getElementById("awardsNextBtn").addEventListener("click", async () => {
   const snap = await getDoc(doc(db, "state", "awards"));
   if (!snap.exists()) return;
   const d = snap.data();
+  const catIds = d.categoryIds || [];
   const nextIndex = (d.currentIndex || 0) + 1;
-  if (nextIndex >= (d.categories || []).length) {
-    toast("That was the last award — use End ceremony to show the full list."); return;
+  if (nextIndex >= catIds.length) {
+    toast("That was the last award — press End ceremony."); return;
   }
   await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: nextIndex });
 });
@@ -1321,43 +1403,65 @@ document.getElementById("awardsFinishBtn").addEventListener("click", async () =>
 });
 
 document.getElementById("awardsResetBtn").addEventListener("click", async () => {
-  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categories: fetchedCategories });
+  if (!confirm("Reset ceremony? This clears revealed status on all awards.")) return;
+  const snap = await getDoc(doc(db, "state", "awards"));
+  const catIds = snap.exists() ? (snap.data().categoryIds || []) : [];
+  if (catIds.length) {
+    const batch = writeBatch(db);
+    catIds.forEach(id => batch.update(doc(db, "award_cats", id), { revealed: false, winners: [] }));
+    await batch.commit();
+  }
+  await setDoc(doc(db, "state", "awards"), { status: "idle", currentIndex: 0, categoryIds: catIds, totalCategories: catIds.length });
   await setDisplayMode("idle");
+  manualAwards.forEach(a => { a.revealed = false; a.winners = []; });
+  saveAwards(); renderManualList();
+  toast("Ceremony reset.");
 });
 
 // ── Live status watcher ──
 function watchAwards() {
-  onSnapshot(doc(db, "state", "awards"), snap => {
+  onSnapshot(doc(db, "state", "awards"), async snap => {
     const el = document.getElementById("awardsStatus");
     const prog = document.getElementById("awardsProgress");
     if (!snap.exists()) { el.innerHTML = `<div class="display muted">Idle</div>`; prog.textContent = ""; return; }
     const s = snap.data();
-    const cats = s.categories || [];
+    const catIds = s.categoryIds || [];
+    const total = s.totalCategories || catIds.length;
     const idx = s.currentIndex || 0;
-    const cat = cats[idx];
+    const catId = catIds[idx];
+
+    // Fetch current category for live nominee list
+    let cat = null;
+    if (catId) {
+      const cs = await getDoc(doc(db, "award_cats", catId));
+      if (cs.exists()) cat = cs.data();
+    }
 
     if (s.status === "idle") {
       el.innerHTML = `<div class="display muted">Idle</div>`;
-      prog.textContent = cats.length ? `${cats.length} award${cats.length===1?"":"s"} loaded` : "";
-    } else if (s.status === "category") {
-      el.innerHTML = `<div class="display" style="color:var(--teal);">${escapeHtml(cat ? cat.name : "—")}</div>
-        <p class="muted" style="font-size:13px; margin-top:6px;">Showing category name — press Reveal winner when ready</p>`;
-      prog.textContent = `Award ${idx + 1} of ${cats.length}`;
-    } else if (s.status === "revealed") {
-      const w = cat && cat.winner;
-      el.innerHTML = `<div class="display" style="color:var(--teal);">🏆 ${escapeHtml(w ? w.name : "—")}</div>
-        <p class="muted" style="font-size:13px; margin-top:6px;">${escapeHtml(cat ? cat.name : "")}</p>`;
-      prog.textContent = `Award ${idx + 1} of ${cats.length}`;
+      prog.textContent = catIds.length ? `${catIds.length} awards ready` : "No awards loaded yet";
+    } else if (s.status === "category" && cat) {
+      el.innerHTML = `
+        <div class="display" style="color:var(--teal); font-size:28px;">${escapeHtml(cat.name)}</div>
+        <p class="muted" style="font-size:12px; margin-top:8px;">Tick winner(s) then press Reveal — or leave blank to auto-pick highest votes:</p>
+        <div style="margin-top:10px; text-align:left; max-height:200px; overflow-y:auto;">
+          ${(cat.nominees||[]).map(n => `
+            <label style="display:flex; align-items:center; gap:8px; padding:7px 0; cursor:pointer; border-bottom:1px solid var(--border);">
+              <input type="checkbox" class="award-nominee-cb" value="${n.id}" style="width:auto; flex:0 0 auto;" />
+              ${n.photoBase64 ? `<img src="${n.photoBase64}" style="width:30px;height:30px;object-fit:cover;border-radius:50%;flex:0 0 auto;" />` : ""}
+              <span style="flex:1; font-size:13px;">${escapeHtml(n.name)}${n.dept ? ` <span class="muted">(${escapeHtml(n.dept)})</span>` : ""}</span>
+              <span class="mono muted" style="font-size:12px;">${n.votes ? n.votes + " votes" : ""}</span>
+            </label>`).join("")}
+        </div>`;
+      prog.textContent = `Award ${idx+1} of ${total}`;
+    } else if (s.status === "revealed" && cat) {
+      const winners = cat.winners || [];
+      el.innerHTML = `<div class="display" style="color:var(--teal); font-size:24px;">🏆 ${escapeHtml(winners.map(w=>w.name).join(" & ") || "—")}</div>
+        <p class="muted" style="font-size:13px; margin-top:6px;">${escapeHtml(cat.name)}</p>`;
+      prog.textContent = `Award ${idx+1} of ${total}`;
     } else if (s.status === "finished") {
       el.innerHTML = `<div class="display" style="color:var(--teal);">Ceremony complete 🏁</div>`;
-      prog.textContent = `All ${cats.length} awards announced`;
-    }
-
-    // Keep preview in sync when admin page is freshly loaded mid-ceremony
-    if (cats.length && !document.getElementById("awardsPreview").querySelector("table")) {
-      renderAwardsPreview(cats);
-      fetchedCategories = cats;
-      document.getElementById("pushToDisplayBtn").style.display = "";
+      prog.textContent = `All ${total} awards announced`;
     }
   });
 }
