@@ -514,33 +514,36 @@ async function boot() {
   watchKaraoke();
   watchQuiz();
   watchAwards();
+  watchConfig();
 }
 
 /* ===================== ATTENDEES ===================== */
 let allAttendees = [];
+let karaokeIdSet = new Set();
+let quizIdSet = new Set();
+
 function watchAttendees() {
   onSnapshot(collection(db, "attendees"), snap => {
     allAttendees = [];
     snap.forEach(d => allAttendees.push({ id: d.id, ...d.data() }));
     allAttendees.sort((a, b) => (b.registeredAt?.toMillis?.() || 0) - (a.registeredAt?.toMillis?.() || 0));
     renderAttendeeTable();
-  });
+  }, err => console.error("attendees listener:", err));
+
   onSnapshot(collection(db, "karaoke_participants"), snap => {
     document.getElementById("statKaraoke").textContent = snap.size;
-  });
+    karaokeIdSet = new Set();
+    snap.forEach(d => karaokeIdSet.add(d.id));
+    renderAttendeeTable();
+  }, err => console.error("karaoke_participants listener:", err));
+
   onSnapshot(collection(db, "quiz_participants"), snap => {
     document.getElementById("statQuiz").textContent = snap.size;
-  });
+    quizIdSet = new Set();
+    snap.forEach(d => quizIdSet.add(d.id));
+    renderAttendeeTable();
+  }, err => console.error("quiz_participants listener:", err));
 }
-
-let karaokeIdSet = new Set();
-let quizIdSet = new Set();
-onSnapshot(collection(db, "karaoke_participants"), snap => {
-  karaokeIdSet = new Set(); snap.forEach(d => karaokeIdSet.add(d.id)); renderAttendeeTable();
-});
-onSnapshot(collection(db, "quiz_participants"), snap => {
-  quizIdSet = new Set(); snap.forEach(d => quizIdSet.add(d.id)); renderAttendeeTable();
-});
 
 function renderAttendeeTable() {
   document.getElementById("statTotal").textContent = allAttendees.length;
@@ -1523,13 +1526,15 @@ document.getElementById("saveEventNameBtn").addEventListener("click", async () =
   } catch(e) { toast("Failed: " + e.message); }
 });
 
-onSnapshot(doc(db, "state", "config"), snap => {
-  if (snap.exists() && snap.data().eventName) {
-    document.getElementById("topEventName").textContent = snap.data().eventName;
-    const inp = document.getElementById("configEventName");
-    if (!inp.value) inp.value = snap.data().eventName;
-  }
-});
+function watchConfig() {
+  onSnapshot(doc(db, "state", "config"), snap => {
+    if (snap.exists() && snap.data().eventName) {
+      document.getElementById("topEventName").textContent = snap.data().eventName;
+      const inp = document.getElementById("configEventName");
+      if (!inp.value) inp.value = snap.data().eventName;
+    }
+  }, err => console.error("config listener:", err));
+}
 
 document.getElementById("addUserBtn").addEventListener("click", async () => {
   const staffId  = document.getElementById("addUserStaffId").value.trim();
