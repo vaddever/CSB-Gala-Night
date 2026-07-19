@@ -118,6 +118,7 @@
 </div>
 
 <div id="app">
+  <div id="errorBanner" style="display:none; background:var(--red); color:#fff; padding:11px 20px; font-size:13px; position:sticky; top:0; z-index:200; line-height:1.6;"></div>
   <div class="topbar">
     <div class="display" id="topEventName">Event Control Room</div>
     <div class="links">
@@ -355,10 +356,10 @@
 
       <div class="grid">
         <div class="card">
-          <div class="eyebrow">Firebase connection</div>
-          <p class="muted" style="font-size:13px; margin-top:6px;">Confirm Firebase is reachable before the event starts.</p>
-          <button class="btn btn-teal btn-block" id="testConnectionBtn" style="margin-top:14px;">Test connection</button>
-          <div id="connectionStatus" style="margin-top:10px; font-size:13px; min-height:20px;"></div>
+          <div class="eyebrow">Firebase diagnostic</div>
+          <p class="muted" style="font-size:13px; margin-top:6px;">Run this if data isn't showing. It tests auth, reads, writes, and rules — and tells you exactly what to fix.</p>
+          <button class="btn btn-teal btn-block" id="testConnectionBtn" style="margin-top:14px;">▶ Run full diagnostic</button>
+          <div id="connectionStatus" style="margin-top:12px; font-size:13px; line-height:1.8; min-height:20px;"></div>
 
           <div class="eyebrow" style="margin-top:24px;">Display name</div>
           <div class="row" style="margin-top:8px; gap:8px;">
@@ -453,6 +454,14 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2400);
+}
+function showBanner(msg) {
+  const b = document.getElementById("errorBanner");
+  b.style.display = "block";
+  b.innerHTML = `⚠️ <strong>Firebase error:</strong> ${msg}
+    &nbsp;·&nbsp; <a href="https://console.firebase.google.com" target="_blank" style="color:#fff;text-decoration:underline;">Open Firebase console</a>
+    &nbsp;·&nbsp; <button onclick="this.parentElement.style.display='none'" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;">✕</button>`;
+  console.error("Firebase:", msg);
 }
 async function ensureAuth() {
   if (auth.currentUser) return auth.currentUser;
@@ -754,18 +763,30 @@ function watchKaraoke() {
     karaokeParticipants = [];
     snap.forEach(d => karaokeParticipants.push({ id: d.id, ...d.data() }));
     renderPairingCounts();
+  }, err => {
+    showBanner("Karaoke participants error: " + err.message);
+    document.getElementById("pairingCounts").textContent = "⚠️ " + err.message;
   });
+
   onSnapshot(collection(db, "karaoke_songs"), snap => {
     karaokeSongs = [];
     snap.forEach(d => karaokeSongs.push({ id: d.id, ...d.data() }));
     renderSongRows();
+  }, err => {
+    showBanner("Songs error: " + err.message);
+    document.getElementById("songRows").innerHTML = `<tr><td colspan="3" style="color:var(--red); font-size:12px;">⚠️ ${err.message}</td></tr>`;
   });
+
   onSnapshot(query(collection(db, "karaoke_pairs"), orderBy("createdAt", "asc")), snap => {
     karaokePairs = [];
     snap.forEach(d => karaokePairs.push({ id: d.id, ...d.data() }));
     renderPairRows();
+  }, err => {
+    showBanner("Pairs error: " + err.message);
+    document.getElementById("pairRows").innerHTML = `<p style="color:var(--red); font-size:12px;">⚠️ ${err.message}</p>`;
   });
-  onSnapshot(collection(db, "karaoke_votes"), () => renderPairRows());
+
+  onSnapshot(collection(db, "karaoke_votes"), () => renderPairRows(), err => console.warn("votes:", err));
 }
 
 function renderPairingCounts() {
@@ -977,11 +998,14 @@ function watchQuiz() {
     quizQuestions = [];
     snap.forEach(d => quizQuestions.push({ id: d.id, ...d.data() }));
     renderQuestionRows();
+  }, err => {
+    showBanner("Quiz questions error: " + err.message);
+    document.getElementById("questionRows").innerHTML = `<p style="color:var(--red); font-size:12px;">⚠️ ${err.message}</p>`;
   });
   onSnapshot(doc(db, "state", "quiz"), snap => {
     quizState = snap.exists() ? snap.data() : { status: "idle" };
     renderQuizStatus();
-  });
+  }, err => console.warn("quiz state:", err));
 }
 
 document.getElementById("addQuestionBtn").addEventListener("click", async () => {
@@ -1545,19 +1569,48 @@ document.getElementById("addUserKaraoke").addEventListener("change", function() 
 
 document.getElementById("testConnectionBtn").addEventListener("click", async () => {
   const el = document.getElementById("connectionStatus");
-  el.textContent = "Connecting...";
-  el.style.color = "var(--text-muted)";
+  const line = (icon, msg) => { el.innerHTML += `<div>${icon} ${msg}</div>`; };
+  el.innerHTML = "<div>Running diagnostic…</div>";
+
+  // 1. Auth
   try {
     await ensureAuth();
-    await getDoc(doc(db, "state", "display"));
-    el.textContent = "Connected to Firebase.";
-    el.style.color = "var(--teal)";
-    toast("Firebase OK");
+    line("✅", `Authenticated (uid: ${auth.currentUser?.uid?.slice(0,8)}…)`);
   } catch(e) {
-    el.textContent = "Failed: " + e.message;
-    el.style.color = "var(--red)";
-    toast("Firebase error: " + e.message);
+    line("❌", `Auth FAILED: ${e.message}`);
+    line("👉", "Go to Firebase console → Authentication → Sign-in method → Anonymous → Enable");
+    return;
   }
+
+  // 2. Read test on each collection
+  const cols = ["attendees","karaoke_songs","karaoke_participants","karaoke_pairs","quiz_questions","quiz_participants","lucky_draw_winners"];
+  for (const col of cols) {
+    try {
+      const snap = await getDocs(collection(db, col));
+      line("✅", `${col}: ${snap.size} doc(s) readable`);
+    } catch(e) {
+      line("❌", `${col}: READ FAILED — ${e.message}`);
+      if (e.message.includes("permission") || e.message.includes("Missing")) {
+        line("👉", "Fix Firestore security rules — see README for the correct rules to publish");
+      }
+      if (e.message.includes("index") || e.message.includes("Index")) {
+        line("👉", "Missing Firestore index. Click the link in browser console to create it.");
+      }
+    }
+  }
+
+  // 3. Write test
+  try {
+    const testRef = doc(db, "state", "display");
+    const current = await getDoc(testRef);
+    const currentMode = current.exists() ? current.data().mode : "idle";
+    await setDoc(testRef, { mode: currentMode }, { merge: true });
+    line("✅", "Write test passed");
+  } catch(e) {
+    line("❌", `Write FAILED: ${e.message}`);
+  }
+
+  line("✅", "Diagnostic complete.");
 });
 
 document.getElementById("saveEventNameBtn").addEventListener("click", async () => {
