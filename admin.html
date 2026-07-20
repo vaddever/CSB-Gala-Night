@@ -252,12 +252,14 @@
           <label for="qText">Question</label>
           <input type="text" id="qText" placeholder="e.g. What year did the company start?" />
           <div id="qOptionsInput">
-            <div class="opt-input-row"><input type="radio" name="qCorrect" value="0" checked /><input type="text" placeholder="Option A" /></div>
-            <div class="opt-input-row"><input type="radio" name="qCorrect" value="1" /><input type="text" placeholder="Option B" /></div>
-            <div class="opt-input-row"><input type="radio" name="qCorrect" value="2" /><input type="text" placeholder="Option C" /></div>
-            <div class="opt-input-row"><input type="radio" name="qCorrect" value="3" /><input type="text" placeholder="Option D" /></div>
+            <div class="opt-input-row"><input type="radio" name="qCorrect" value="0" checked /><input type="text" placeholder="Option A" /><button class="btn btn-ghost remove-opt-btn" style="font-size:11px;padding:4px 7px;flex:0 0 auto;" title="Remove">✕</button></div>
+            <div class="opt-input-row"><input type="radio" name="qCorrect" value="1" /><input type="text" placeholder="Option B" /><button class="btn btn-ghost remove-opt-btn" style="font-size:11px;padding:4px 7px;flex:0 0 auto;" title="Remove">✕</button></div>
+            <div class="opt-input-row"><input type="radio" name="qCorrect" value="2" /><input type="text" placeholder="Option C" /><button class="btn btn-ghost remove-opt-btn" style="font-size:11px;padding:4px 7px;flex:0 0 auto;" title="Remove">✕</button></div>
           </div>
-          <p class="muted" style="font-size:12px; margin-top:8px;">Select the radio next to the correct answer.</p>
+          <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+            <button class="btn btn-ghost" id="addOptBtn" style="font-size:12px;padding:6px 12px;">+ Add option</button>
+            <p class="muted" style="font-size:12px; margin:0;">Radio = correct answer</p>
+          </div>
           <button class="btn btn-teal btn-block" id="addQuestionBtn" style="margin-top:14px;">Add question</button>
 
           <label for="quizDuration" style="margin-top:22px;">Seconds per question</label>
@@ -530,6 +532,8 @@ async function boot() {
     watchQuiz();
     watchAwards();
     watchConfig();
+    // Auto-poll every 15s as fallback when onSnapshot drops
+    setInterval(() => initialLoad().catch(e => console.warn('poll:', e)), 15_000);
   } catch(e) {
     const msg = e.message || String(e);
     showBanner(msg + " — Check: (1) Anonymous Auth enabled in Firebase console, (2) Firestore security rules published (see README), (3) firebase-config.js has correct values.");
@@ -541,14 +545,19 @@ async function boot() {
 
 /* One-shot getDocs load — plain HTTP, no WebSocket, runs once after auth */
 async function initialLoad() {
-  const [aSnap, kpSnap, qpSnap, ksSnap, kpairSnap, qqSnap] = await Promise.all([
+  // Basic collections — no orderBy, always safe
+  const [aSnap, kpSnap, qpSnap, ksSnap] = await Promise.all([
     getDocs(collection(db, "attendees")),
     getDocs(collection(db, "karaoke_participants")),
     getDocs(collection(db, "quiz_participants")),
     getDocs(collection(db, "karaoke_songs")),
-    getDocs(query(collection(db, "karaoke_pairs"), orderBy("createdAt", "asc"))),
-    getDocs(query(collection(db, "quiz_questions"), orderBy("order", "asc"))),
   ]);
+  // orderBy queries isolated — a missing Firestore index won't kill the whole load
+  let kpairSnap, qqSnap;
+  try { kpairSnap = await getDocs(query(collection(db,"karaoke_pairs"), orderBy("createdAt","asc"))); }
+  catch { kpairSnap = await getDocs(collection(db,"karaoke_pairs")); }
+  try { qqSnap = await getDocs(query(collection(db,"quiz_questions"), orderBy("order","asc"))); }
+  catch { qqSnap = await getDocs(collection(db,"quiz_questions")); }
 
   // Attendees
   allAttendees = [];
@@ -573,6 +582,50 @@ async function initialLoad() {
   renderQuestionRows();
 }
 
+
+/* ── targeted reload helpers ── */
+async function reloadAttendees() {
+  try {
+    const [aSnap, kpSnap, qpSnap] = await Promise.all([
+      getDocs(collection(db, 'attendees')),
+      getDocs(collection(db, 'karaoke_participants')),
+      getDocs(collection(db, 'quiz_participants')),
+    ]);
+    allAttendees = []; aSnap.forEach(d => allAttendees.push({id:d.id,...d.data()}));
+    allAttendees.sort((a,b) => (b.registeredAt?.toMillis?.()||0) - (a.registeredAt?.toMillis?.()||0));
+    karaokeIdSet = new Set(); kpSnap.forEach(d => karaokeIdSet.add(d.id));
+    quizIdSet    = new Set(); qpSnap.forEach(d => quizIdSet.add(d.id));
+    document.getElementById('statKaraoke').textContent = kpSnap.size;
+    document.getElementById('statQuiz').textContent    = qpSnap.size;
+    renderAttendeeTable();
+  } catch(e) { console.warn('reloadAttendees:', e); }
+}
+async function reloadKaraoke() {
+  try {
+    const [kpSnap, ksSnap] = await Promise.all([
+      getDocs(collection(db,'karaoke_participants')),
+      getDocs(collection(db,'karaoke_songs')),
+    ]);
+    let kpairSnap;
+    try { kpairSnap = await getDocs(query(collection(db,'karaoke_pairs'), orderBy('createdAt','asc'))); }
+    catch { kpairSnap = await getDocs(collection(db,'karaoke_pairs')); }
+    karaokeParticipants = []; kpSnap.forEach(d => karaokeParticipants.push({id:d.id,...d.data()}));
+    karaokeSongs  = []; ksSnap.forEach(d => karaokeSongs.push({id:d.id,...d.data()}));
+    karaokePairs  = []; kpairSnap.forEach(d => karaokePairs.push({id:d.id,...d.data()}));
+    karaokeIdSet  = new Set(); kpSnap.forEach(d => karaokeIdSet.add(d.id));
+    document.getElementById('statKaraoke').textContent = kpSnap.size;
+    renderPairingCounts(); renderSongRows(); renderPairRows(); renderAttendeeTable();
+  } catch(e) { showBanner('Karaoke reload failed: ' + e.message); console.error('reloadKaraoke:', e); }
+}
+async function reloadQuiz() {
+  try {
+    let snap;
+    try { snap = await getDocs(query(collection(db,'quiz_questions'), orderBy('order','asc'))); }
+    catch { snap = await getDocs(collection(db,'quiz_questions')); }
+    quizQuestions = []; snap.forEach(d => quizQuestions.push({id:d.id,...d.data()}));
+    renderQuestionRows();
+  } catch(e) { showBanner('Quiz reload failed: ' + e.message); console.error('reloadQuiz:', e); }
+}
 
 /* ===================== ATTENDEES ===================== */
 let allAttendees = [];
@@ -689,6 +742,18 @@ document.getElementById("startDrawBtn").addEventListener("click", async () => {
     winnerName: null, winnerStaffId: null, winnerAttendeeId: null
   });
   await setDisplayMode("lucky_draw");
+
+  // Update UI immediately — don't rely on onSnapshot firing
+  document.getElementById("startDrawBtn").style.display = "none";
+  document.getElementById("stopDrawBtn").style.display = "block";
+  document.getElementById("drawStatus").innerHTML =
+    `<div class="display" style="color:var(--gold);">Running…</div><p class="muted">${poolNames.length} in the pool · ${stopMode === "time" ? durationSec + "s" : "manual stop"}</p>`;
+
+  // Set timer directly for time-based mode
+  if (drawTimeoutHandle) clearTimeout(drawTimeoutHandle);
+  if (stopMode === "time") {
+    drawTimeoutHandle = setTimeout(() => stopDraw(poolNames), durationSec * 1000);
+  }
 });
 
 document.getElementById("stopDrawBtn").addEventListener("click", async () => {
@@ -848,6 +913,7 @@ document.getElementById("addSongBtn").addEventListener("click", async () => {
     document.getElementById("songYoutubeUrl").value = "";
     document.getElementById("songThumbPreview").style.display = "none";
     toast("✅ Song saved: " + title);
+    reloadKaraoke();
   } catch(e) {
     toast("❌ Save failed: " + e.message);
     console.error("addSongBtn error:", e);
@@ -905,6 +971,7 @@ document.getElementById("generatePairsBtn").addEventListener("click", async () =
   }
   await batch.commit();
   toast(`${n} pair${n === 1 ? "" : "s"} created.`);
+  reloadKaraoke();
 });
 
 function shuffle(arr) {
@@ -1009,6 +1076,7 @@ document.getElementById("resetKaraokeBtn").addEventListener("click", async () =>
   await batch.commit();
   await setDoc(doc(db, "state", "karaoke"), { phase: "lobby", currentPairId: null });
   toast("Karaoke night reset.");
+  reloadKaraoke();
 });
 
 /* ===================== QUIZ ===================== */
@@ -1030,20 +1098,44 @@ function watchQuiz() {
   }, err => console.warn("quiz state:", err));
 }
 
+// ── Option add/remove ──
+document.getElementById("qOptionsInput").addEventListener("click", e => {
+  if (!e.target.classList.contains("remove-opt-btn")) return;
+  const rows = document.querySelectorAll("#qOptionsInput .opt-input-row");
+  if (rows.length <= 2) { toast("Minimum 2 options required."); return; }
+  e.target.closest(".opt-input-row").remove();
+  document.querySelectorAll("#qOptionsInput .opt-input-row").forEach((row, i) => {
+    row.querySelector("input[type=radio]").value = i;
+    row.querySelector("input[type=text]").placeholder = "Option " + "ABCDEFGH"[i];
+  });
+});
+document.getElementById("addOptBtn").addEventListener("click", () => {
+  const rows = document.querySelectorAll("#qOptionsInput .opt-input-row");
+  if (rows.length >= 6) { toast("Maximum 6 options."); return; }
+  const idx = rows.length;
+  const div = document.createElement("div");
+  div.className = "opt-input-row";
+  div.innerHTML = `<input type="radio" name="qCorrect" value="${idx}" /><input type="text" placeholder="Option ${"ABCDEFGH"[idx]}" /><button class="btn btn-ghost remove-opt-btn" style="font-size:11px;padding:4px 7px;flex:0 0 auto;" title="Remove">✕</button>`;
+  document.getElementById("qOptionsInput").appendChild(div);
+});
+
 document.getElementById("addQuestionBtn").addEventListener("click", async () => {
   const text = document.getElementById("qText").value.trim();
   const inputs = [...document.querySelectorAll("#qOptionsInput .opt-input-row input[type=text]")];
   const options = inputs.map(i => i.value.trim());
-  const correctIndex = Number(document.querySelector('input[name="qCorrect"]:checked').value);
+  const correctIndex = Number(document.querySelector("input[name=qCorrect]:checked").value);
 
-  if (!text || options.some(o => !o)) { toast("Fill in the question and all 4 options."); return; }
+  if (!text) { toast("Enter the question text."); return; }
+  if (options.length < 2) { toast("Add at least 2 options."); return; }
+  if (options.some(o => !o)) { toast("Fill in all option fields — or remove empty ones."); return; }
 
   const order = quizQuestions.length ? Math.max(...quizQuestions.map(q => q.order || 0)) + 1 : 1;
   await addDoc(collection(db, "quiz_questions"), { text, options, correctIndex, order, used: false });
   document.getElementById("qText").value = "";
   inputs.forEach(i => i.value = "");
-  document.querySelector('input[name="qCorrect"][value="0"]').checked = true;
+  document.querySelector("input[name=qCorrect][value='0']").checked = true;
   toast("Question added.");
+  reloadQuiz();
 });
 
 function renderQuestionRows() {
@@ -1052,7 +1144,7 @@ function renderQuestionRows() {
   wrap.innerHTML = quizQuestions.map((q, idx) => `
     <div class="qlist-row" style="${q.used ? "opacity:0.55;" : ""}">
       <div class="qtext">${idx + 1}. ${escapeHtml(q.text)} ${q.used ? '<span class="status-tag done" style="margin-left:6px;">asked</span>' : ""}</div>
-      <div class="opts">${q.options.map((o, i) => `<span class="${i === q.correctIndex ? "correct" : ""}">${escapeHtml(o)}${i === q.correctIndex ? " ✓" : ""}</span>`).join(" &nbsp;·&nbsp; ")}</div>
+      <div class="opts">${(q.options||[]).map((o, i) => `<span class="${i === q.correctIndex ? "correct" : ""}">${escapeHtml(o)}${i === q.correctIndex ? " ✓" : ""}</span>`).join(" · ")}</div>
       <div class="row-actions">
         <button class="btn btn-ghost" data-up="${q.id}">↑</button>
         <button class="btn btn-ghost" data-down="${q.id}">↓</button>
@@ -1170,11 +1262,13 @@ function renderQuizStatus() {
   if (s.status === "finished") { el.innerHTML = `<div class="display" style="color:var(--gold);">Finished 🏁</div>`; return; }
 }
 
+let answerCountUnsub = null;
 function watchAnswerCount(questionId) {
-  onSnapshot(collection(db, "quiz_answers"), snap => {
+  if (answerCountUnsub) { answerCountUnsub(); answerCountUnsub = null; }
+  answerCountUnsub = onSnapshot(collection(db, "quiz_answers"), snap => {
     const count = snap.docs.filter(d => d.data().questionId === questionId).length;
     document.getElementById("quizAnswerCount").textContent = `${count} answer${count === 1 ? "" : "s"} received so far`;
-  });
+  }, err => console.warn("answerCount:", err));
 }
 
 document.getElementById("resetQuizScoresBtn").addEventListener("click", async () => {
@@ -1189,6 +1283,7 @@ document.getElementById("resetQuizScoresBtn").addEventListener("click", async ()
   await batch.commit();
   await setDoc(doc(db, "state", "quiz"), { status: "idle", currentQuestionId: null, batchNumber: 0 });
   toast("Quiz scores reset.");
+  reloadQuiz();
 });
 
 /* ===================== AWARDS ===================== */
@@ -1429,12 +1524,23 @@ document.getElementById("useManualAwardsBtn").addEventListener("click", async ()
     });
     await setDisplayMode("awards");
     toast(`✅ ${manualAwards.length} awards saved & pushed to display.`);
+    // Show preview immediately
+    renderAwardsPreview(manualAwards.map(a => ({
+      name: a.name, nominees: a.nominees, winners: a.winners || [],
+      presetWinner: a.nominees.find(n => n.id === a.winnerId) || a.nominees[0] || null,
+      totalVotes: a.nominees.reduce((s,n)=>s+(n.votes||0),0)
+    })));
   } catch(e) {
     toast("❌ Error: " + e.message); console.error(e);
   } finally {
     btn.disabled = false;
     btn.textContent = "Push to display screen →";
   }
+});
+
+// ── pushToDisplayBtn: re-push current manualAwards to Firestore ──
+document.getElementById("pushToDisplayBtn").addEventListener("click", () => {
+  document.getElementById("useManualAwardsBtn").click();
 });
 
 // ── Shared preview ──
@@ -1459,49 +1565,6 @@ function renderAwardsPreview(categories) {
 }
 
 // ── Portal fetch ──
-document.getElementById("awardsTabPortal").addEventListener("click", () => {
-  document.getElementById("awardsTabPortal").classList.add("active");
-  document.getElementById("awardsTabManual").classList.remove("active");
-  document.getElementById("awardsSectionPortal").style.display = "";
-  document.getElementById("awardsSectionManual").style.display = "none";
-});
-document.getElementById("awardsTabManual").addEventListener("click", () => {
-  document.getElementById("awardsTabManual").classList.add("active");
-  document.getElementById("awardsTabPortal").classList.remove("active");
-  document.getElementById("awardsSectionManual").style.display = "";
-  document.getElementById("awardsSectionPortal").style.display = "none";
-});
-
-document.getElementById("fetchWinnersBtn").addEventListener("click", async () => {
-  const gasUrl = document.getElementById("gasUrl").value.trim();
-  const gasYear = document.getElementById("gasYear").value.trim();
-  const statusEl = document.getElementById("fetchStatus");
-  if (!gasUrl) { statusEl.textContent = "Paste the voting portal GAS URL first."; return; }
-  statusEl.textContent = "Fetching…";
-  try {
-    const payload = { action: "getWinners" };
-    if (gasYear) payload.year = gasYear;
-    const resp = await fetch(gasUrl + "?data=" + encodeURIComponent(JSON.stringify(payload)));
-    const data = await resp.json();
-    if (data.status !== "ok") { statusEl.textContent = "Error: " + (data.message || "unknown"); return; }
-    const cats = data.categories || [];
-    if (!cats.length) { statusEl.textContent = "No categories found."; return; }
-    // Merge into manualAwards
-    cats.forEach(c => {
-      const existing = manualAwards.find(a => a.name === c.name);
-      if (!existing) {
-        manualAwards.push({ id: "portal_" + Date.now() + "_" + Math.random(), name: c.name,
-          nominees: (c.nominees||[]).map(n=>({id:"pn_"+Date.now()+"_"+Math.random(),name:n.name,dept:n.dept||"",votes:n.votes||0,photoBase64:null})),
-          winnerId: null, revealed: false, winners: [] });
-      }
-    });
-    saveAwards(); renderManualList();
-    statusEl.textContent = `✓ ${cats.length} categories merged into manual list.`;
-  } catch (e) {
-    statusEl.textContent = "Fetch failed: " + e.message;
-  }
-});
-
 // ── Live controls ──
 document.getElementById("awardsCeremonyBtn").addEventListener("click", async () => {
   const snap = await getDoc(doc(db, "state", "awards"));
@@ -1693,6 +1756,7 @@ document.getElementById("addUserBtn").addEventListener("click", async () => {
     document.getElementById("addUserKaraoke").checked = false;
     document.getElementById("addUserQuiz").checked = false;
     document.getElementById("karaokeGenderWrap").style.display = "none";
+    reloadAttendees();
     toast(name + " added.");
   } catch(e) {
     statusEl.textContent = "Error: " + e.message;
@@ -1722,6 +1786,7 @@ document.getElementById("addTestUsersBtn").addEventListener("click", async () =>
     await batch.commit();
     s.textContent = "4 test attendees added.";
     toast("Test attendees added.");
+    reloadAttendees();
   } catch(e) { s.textContent = "Error: "+e.message; toast("Failed: "+e.message); }
 });
 
@@ -1740,6 +1805,7 @@ document.getElementById("clearTestDataBtn").addEventListener("click", async () =
     await batch.commit();
     document.getElementById("testStatus").textContent = "Removed " + snap.size + " test user(s).";
     toast("Removed " + snap.size + " test user(s).");
+    reloadAttendees();
   } catch(e) { toast("Failed: "+e.message); }
 });
 
@@ -1755,6 +1821,7 @@ document.getElementById("clearKaraokeDataBtn").addEventListener("click", async (
     await batch.commit();
     await setDoc(doc(db,"state","karaoke"),{phase:"lobby",currentPairId:null,videoId:null,videoPlaying:false});
     toast("Karaoke data cleared.");
+    reloadKaraoke();
   } catch(e) { toast("Failed: "+e.message); }
 });
 

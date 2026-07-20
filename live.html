@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Event Live</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="firebase-config.js"></script>
+<style>
+  body { padding-bottom: 80px; }
+
+  .live-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .live-header .display { font-size: 22px; color: var(--gold); flex: 1; }
+  .pulse-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red); flex-shrink: 0;
+    animation: pulse-anim 1.4s infinite;
+  }
+  @keyframes pulse-anim { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.3;transform:scale(0.7);} }
+
+  /* ── mode banner ── */
+  .mode-banner {
+    padding: 14px 20px;
+    font-family: var(--font-display);
+    font-size: 18px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.4s;
+  }
+  .mode-banner.idle    { color: var(--text-muted); background: var(--bg); }
+  .mode-banner.draw    { color: var(--gold);       background: rgba(232,184,75,0.08); }
+  .mode-banner.karaoke { color: var(--pink);       background: rgba(255,77,141,0.08); }
+  .mode-banner.quiz    { color: var(--teal);       background: rgba(54,214,197,0.08); }
+  .mode-banner.awards  { color: var(--teal);       background: rgba(54,214,197,0.08); }
+
+  /* ── tabs ── */
+  .live-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+    position: sticky; top: 57px; background: var(--bg); z-index: 40;
+  }
+  .live-tab {
+    flex: 1; padding: 12px 8px; text-align: center;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; border: none; background: transparent;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .live-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .live-panel { display: none; padding: 16px 20px; }
+  .live-panel.active { display: block; }
+
+  /* ── announcement cards ── */
+  .announce-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    animation: fadeSlide 0.3s ease;
+  }
+  @keyframes fadeSlide { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
+  .announce-card .a-eyebrow { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+  .announce-card .a-title   { font-family: var(--font-display); font-size: 24px; }
+  .announce-card .a-sub     { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .announce-card.gold   { border-color: rgba(232,184,75,0.4);  background: rgba(232,184,75,0.07); }
+  .announce-card.pink   { border-color: rgba(255,77,141,0.4);  background: rgba(255,77,141,0.07); }
+  .announce-card.teal   { border-color: rgba(54,214,197,0.4);  background: rgba(54,214,197,0.07); }
+  .announce-card .a-title.gold  { color: var(--gold); }
+  .announce-card .a-title.teal  { color: var(--teal); }
+  .announce-card .a-title.pink  { color: var(--pink); }
+
+  /* ── agenda ── */
+  .agenda-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 0; border-bottom: 1px solid var(--border);
+  }
+  .agenda-item:last-child { border-bottom: none; }
+  .agenda-time { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); flex: 0 0 50px; padding-top: 2px; }
+  .agenda-icon { font-size: 20px; flex: 0 0 28px; text-align: center; }
+  .agenda-title { font-size: 15px; font-weight: 600; }
+  .agenda-desc  { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .agenda-item.now .agenda-title { color: var(--gold); }
+  .agenda-item.now .agenda-time  { color: var(--gold); }
+
+  /* ── quiz leaderboard ── */
+  .lb-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-rank { font-family: var(--font-display); font-size: 22px; color: var(--text-muted); width: 32px; flex-shrink: 0; text-align: center; }
+  .lb-rank.top { color: var(--gold); }
+  .lb-name  { flex: 1; font-size: 15px; }
+  .lb-score { font-family: var(--font-mono); font-size: 14px; color: var(--teal); }
+
+  /* ── empty state ── */
+  .empty { text-align: center; color: var(--text-muted); font-size: 14px; padding: 40px 20px; }
+</style>
+</head>
+<body>
+
+<div class="live-header">
+  <div class="pulse-dot" id="connectionDot" style="background:var(--text-muted);"></div>
+  <div class="display" id="liveEventName">Event Live</div>
+</div>
+
+<div class="mode-banner idle" id="modeBanner">Standby — event starting soon</div>
+
+<div class="live-tabs">
+  <button class="live-tab active" data-tab="feed">📡 Live</button>
+  <button class="live-tab" data-tab="agenda">📋 Agenda</button>
+  <button class="live-tab" data-tab="quiz">🧠 Quiz</button>
+</div>
+
+<!-- LIVE FEED -->
+<div class="live-panel active" id="panel-feed">
+  <div id="feedList"><div class="empty">Waiting for announcements…</div></div>
+</div>
+
+<!-- AGENDA -->
+<div class="live-panel" id="panel-agenda">
+  <div class="card" id="agendaList">
+    <div class="agenda-item">
+      <div class="agenda-time">Doors</div>
+      <div class="agenda-icon">🚪</div>
+      <div><div class="agenda-title">Check-in & Welcome</div><div class="agenda-desc">Scan the entrance QR to get your event pass</div></div>
+    </div>
+    <div class="agenda-item">
+      <div class="agenda-time"></div>
+      <div class="agenda-icon">🎰</div>
+      <div><div class="agenda-title">Lucky Draw</div><div class="agenda-desc">Names shuffle on the big screen — will yours stop?</div></div>
+    </div>
+    <div class="agenda-item">
+      <div class="agenda-time"></div>
+      <div class="agenda-icon">🎤</div>
+      <div><div class="agenda-title">Karaoke Night</div><div class="agenda-desc">Paired performers take the stage — audience votes on each pair</div></div>
+    </div>
+    <div class="agenda-item">
+      <div class="agenda-time"></div>
+      <div class="agenda-icon">🧠</div>
+      <div><div class="agenda-title">Quiz Night</div><div class="agenda-desc">Questions hit your phone simultaneously — fastest correct answer wins</div></div>
+    </div>
+    <div class="agenda-item">
+      <div class="agenda-time"></div>
+      <div class="agenda-icon">🏆</div>
+      <div><div class="agenda-title">Staff Awards</div><div class="agenda-desc">Annual award ceremony — winner announcement per category</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- QUIZ LEADERBOARD -->
+<div class="live-panel" id="panel-quiz">
+  <div id="leaderboard"><div class="empty">Quiz hasn't started yet.</div></div>
+</div>
+
+<script type="module">
+import { initializeApp }          from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, collection, onSnapshot, getDocs, query, orderBy, limit }
+                                   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+document.getElementById("liveEventName").textContent = window.EVENT_NAME || "Event Live";
+
+const app  = initializeApp(window.FIREBASE_CONFIG);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+// ── tabs ──
+document.querySelectorAll(".live-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".live-tab").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".live-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+// ── auth & boot ──
+async function boot() {
+  try {
+    if (!auth.currentUser) await signInAnonymously(auth);
+    document.getElementById("connectionDot").style.background = "var(--teal)";
+    watchAll();
+  } catch(e) {
+    document.getElementById("connectionDot").style.background = "var(--red)";
+    document.getElementById("feedList").innerHTML = `<div class="empty">Could not connect to Firebase.<br><small>${e.message}</small></div>`;
+  }
+}
+boot();
+
+// ── announcements feed (in-memory list, rebuilt from Firestore state) ──
+let announcements = [];
+function addAnnouncement(id, type, eyebrow, title, sub) {
+  if (announcements.find(a => a.id === id)) return; // deduplicate
+  announcements.unshift({ id, type, eyebrow, title, sub, time: new Date() });
+  renderFeed();
+}
+function renderFeed() {
+  const el = document.getElementById("feedList");
+  if (announcements.length === 0) {
+    el.innerHTML = `<div class="empty">Waiting for announcements…</div>`;
+    return;
+  }
+  el.innerHTML = announcements.map(a => `
+    <div class="announce-card ${a.type}">
+      <div class="a-eyebrow">${a.eyebrow} · ${a.time.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="a-title ${a.type}">${a.title}</div>
+      ${a.sub ? `<div class="a-sub">${a.sub}</div>` : ""}
+    </div>
+  `).join("");
+}
+
+// ── mode banner ──
+const modeLabels = {
+  idle:     { text: "Standby — event starting soon", cls: "idle" },
+  lucky_draw:{ text: "🎰  Lucky Draw is Live",        cls: "draw" },
+  karaoke:  { text: "🎤  Karaoke Night",              cls: "karaoke" },
+  quiz:     { text: "🧠  Quiz Night",                 cls: "quiz" },
+  awards:   { text: "🏆  Staff Awards Ceremony",      cls: "awards" },
+};
+function setModeBanner(mode) {
+  const banner = document.getElementById("modeBanner");
+  const m = modeLabels[mode] || modeLabels.idle;
+  banner.textContent = m.text;
+  banner.className = "mode-banner " + m.cls;
+}
+
+// ── watch display mode ──
+onSnapshot(doc(db, "state", "display"), snap => {
+  const mode = snap.exists() ? snap.data().mode : "idle";
+  setModeBanner(mode);
+});
+
+// ── watch lucky draw ──
+let lastDrawStatus = null;
+onSnapshot(doc(db, "state", "lucky_draw"), snap => {
+  if (!snap.exists()) return;
+  const s = snap.data();
+  if (s.status === "revealed" && s.winnerName && lastDrawStatus !== "revealed_" + s.winnerName) {
+    lastDrawStatus = "revealed_" + s.winnerName;
+    addAnnouncement("draw_" + s.winnerName + "_" + Date.now(),
+      "gold", "🎰 Lucky Draw Winner",
+      s.winnerName,
+      s.winnerStaffId ? "Staff ID: " + s.winnerStaffId : ""
+    );
+  }
+});
+
+// ── watch karaoke ──
+let lastKaraokePhase = null;
+onSnapshot(doc(db, "state", "karaoke"), snap => {
+  if (!snap.exists()) return;
+  const s = snap.data();
+  if (s.phase === "final" && lastKaraokePhase !== "final") {
+    lastKaraokePhase = "final";
+    // Fetch winner from pairs
+    getDocs(query(collection(db, "karaoke_pairs"), orderBy("totalScore", "desc"), limit(1))).then(pairs => {
+      if (pairs.empty) return;
+      const w = pairs.docs[0].data();
+      addAnnouncement("karaoke_winner",
+        "pink", "🎤 Karaoke Night Winner",
+        `${w.maleName} & ${w.femaleName}`,
+        `Song: ${w.song || ""} · Score: ${(w.totalScore||0).toFixed(1)}`
+      );
+    }).catch(() => {});
+  }
+});
+
+// ── watch quiz ──
+let lastQuizStatus = null;
+onSnapshot(doc(db, "state", "quiz"), snap => {
+  if (!snap.exists()) return;
+  const s = snap.data();
+  if (s.status === "running" && s.currentQuestionId) {
+    document.getElementById("leaderboard").innerHTML = `<div class="empty">Question in progress…</div>`;
+  }
+  if (s.status === "question_ended" && s.lastResult?.fastestName && lastQuizStatus !== s.batchNumber + "_ended") {
+    lastQuizStatus = s.batchNumber + "_ended";
+    addAnnouncement("quiz_q" + s.batchNumber,
+      "teal", "⚡ Quiz — Fastest Answer Q" + s.batchNumber,
+      s.lastResult.fastestName,
+      "Answered in " + ((s.lastResult.fastestTimeMs || 0) / 1000).toFixed(1) + "s"
+    );
+  }
+  if (s.status === "finished") {
+    updateQuizLeaderboard();
+  }
+});
+
+function updateQuizLeaderboard() {
+  getDocs(query(collection(db, "quiz_participants"), orderBy("totalScore", "desc"), limit(20))).then(snap => {
+    if (snap.empty) {
+      document.getElementById("leaderboard").innerHTML = `<div class="empty">No quiz scores yet.</div>`;
+      return;
+    }
+    const rows = [...snap.docs];
+    document.getElementById("leaderboard").innerHTML = `
+      <div class="card">
+        ${rows.map((d, i) => {
+          const p = d.data();
+          const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i + 1);
+          return `<div class="lb-row">
+            <div class="lb-rank ${i < 3 ? 'top' : ''}">${medal}</div>
+            <div class="lb-name">${p.name || "—"}</div>
+            <div class="lb-score">${p.totalScore || 0} pts</div>
+          </div>`;
+        }).join("")}
+      </div>`;
+
+    if (rows.length > 0) {
+      const winner = rows[0].data();
+      addAnnouncement("quiz_final_winner",
+        "teal", "🏆 Quiz Night Winner",
+        winner.name,
+        `Final score: ${winner.totalScore || 0} pts`
+      );
+    }
+  }).catch(() => {});
+}
+
+// ── watch awards ──
+const announcedAwards = new Set();
+onSnapshot(doc(db, "state", "awards"), async snap => {
+  if (!snap.exists()) return;
+  const s = snap.data();
+  if (s.status !== "revealed" && s.status !== "finished") return;
+
+  const catIds = s.categoryIds || [];
+  const idx = s.currentIndex || 0;
+  const catId = catIds[idx];
+  if (!catId || announcedAwards.has(catId)) return;
+
+  try {
+    const catSnap = await getDocs(collection(db, "award_cats"));
+    catSnap.forEach(d => {
+      const cat = d.data();
+      if (!cat.revealed || announcedAwards.has(d.id)) return;
+      announcedAwards.add(d.id);
+      const winners = cat.winners?.length ? cat.winners : (cat.presetWinner ? [cat.presetWinner] : []);
+      if (!winners.length) return;
+      addAnnouncement("award_" + d.id,
+        "teal", "🏆 " + cat.name,
+        winners.map(w => w.name).join(" & "),
+        winners[0]?.dept || ""
+      );
+    });
+  } catch(e) { console.warn("awards:", e); }
+});
+
+// Poll quiz leaderboard every 15s
+setInterval(updateQuizLeaderboard, 15_000);
+</script>
+</body>
+</html>
