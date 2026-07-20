@@ -523,24 +523,56 @@ async function boot() {
   booted = true;
   try {
     await ensureAuth();
-    watchAttendees();
+    await initialLoad();   // getDocs — always works after auth, no WebSocket needed
+    watchAttendees();      // onSnapshot — live updates on top
     watchDraw();
     watchKaraoke();
     watchQuiz();
     watchAwards();
     watchConfig();
   } catch(e) {
-    // Show error prominently so it's not silent
     const msg = e.message || String(e);
-    toast("❌ " + msg);
+    showBanner(msg + " — Check: (1) Anonymous Auth enabled in Firebase console, (2) Firestore security rules published (see README), (3) firebase-config.js has correct values.");
     document.getElementById("attendeeRows").innerHTML =
-      `<tr><td colspan="6" style="color:var(--red); font-size:12px; padding:12px;">
-        ⚠️ ${msg}<br><br>
-        Check: (1) Anonymous Auth enabled in Firebase console, (2) firebase-config.js has correct values, (3) Firestore security rules published.
-      </td></tr>`;
+      `<tr><td colspan="6" style="color:var(--red); font-size:12px; padding:14px;">⚠️ ${msg}</td></tr>`;
     console.error("boot() failed:", e);
   }
 }
+
+/* One-shot getDocs load — plain HTTP, no WebSocket, runs once after auth */
+async function initialLoad() {
+  const [aSnap, kpSnap, qpSnap, ksSnap, kpairSnap, qqSnap] = await Promise.all([
+    getDocs(collection(db, "attendees")),
+    getDocs(collection(db, "karaoke_participants")),
+    getDocs(collection(db, "quiz_participants")),
+    getDocs(collection(db, "karaoke_songs")),
+    getDocs(query(collection(db, "karaoke_pairs"), orderBy("createdAt", "asc"))),
+    getDocs(query(collection(db, "quiz_questions"), orderBy("order", "asc"))),
+  ]);
+
+  // Attendees
+  allAttendees = [];
+  aSnap.forEach(d => allAttendees.push({ id: d.id, ...d.data() }));
+  allAttendees.sort((a, b) => (b.registeredAt?.toMillis?.() || 0) - (a.registeredAt?.toMillis?.() || 0));
+  karaokeIdSet = new Set(); kpSnap.forEach(d => karaokeIdSet.add(d.id));
+  quizIdSet    = new Set(); qpSnap.forEach(d => quizIdSet.add(d.id));
+  document.getElementById("statKaraoke").textContent = kpSnap.size;
+  document.getElementById("statQuiz").textContent    = qpSnap.size;
+  renderAttendeeTable();
+
+  // Karaoke
+  karaokeParticipants = []; kpSnap.forEach(d => karaokeParticipants.push({ id: d.id, ...d.data() }));
+  karaokeSongs = [];        ksSnap.forEach(d => karaokeSongs.push({ id: d.id, ...d.data() }));
+  karaokePairs = [];        kpairSnap.forEach(d => karaokePairs.push({ id: d.id, ...d.data() }));
+  renderPairingCounts();
+  renderSongRows();
+  renderPairRows();
+
+  // Quiz
+  quizQuestions = []; qqSnap.forEach(d => quizQuestions.push({ id: d.id, ...d.data() }));
+  renderQuestionRows();
+}
+
 
 /* ===================== ATTENDEES ===================== */
 let allAttendees = [];
@@ -549,21 +581,11 @@ let quizIdSet = new Set();
 
 async function manualRefreshAttendees() {
   try {
-    const [aSnap, kSnap, qSnap] = await Promise.all([
-      getDocs(collection(db, "attendees")),
-      getDocs(collection(db, "karaoke_participants")),
-      getDocs(collection(db, "quiz_participants")),
-    ]);
-    allAttendees = [];
-    aSnap.forEach(d => allAttendees.push({ id: d.id, ...d.data() }));
-    allAttendees.sort((a, b) => (b.registeredAt?.toMillis?.() || 0) - (a.registeredAt?.toMillis?.() || 0));
-    karaokeIdSet = new Set(); kSnap.forEach(d => karaokeIdSet.add(d.id));
-    quizIdSet = new Set(); qSnap.forEach(d => quizIdSet.add(d.id));
-    document.getElementById("statKaraoke").textContent = kSnap.size;
-    document.getElementById("statQuiz").textContent = qSnap.size;
-    renderAttendeeTable();
-    toast("✅ Refreshed — " + allAttendees.length + " attendee(s).");
+    await ensureAuth();
+    await initialLoad();
+    toast("✅ Refreshed — " + allAttendees.length + " attendee(s), " + karaokeSongs.length + " song(s), " + quizQuestions.length + " question(s).");
   } catch(e) {
+    showBanner("Refresh failed: " + e.message);
     toast("❌ Refresh failed: " + e.message);
   }
 }
