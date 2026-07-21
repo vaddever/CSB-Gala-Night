@@ -419,6 +419,24 @@
         </div>
       </div>
 
+      <!-- Agenda Editor -->
+      <div class="card" style="margin-top:18px;">
+        <div class="eyebrow">Event agenda</div>
+        <p class="muted" style="font-size:13px; margin-top:6px;">This agenda shows in the staff live feed on their phones. Add items in order.</p>
+        <div id="agendaEditorList" style="margin:12px 0; min-height:30px;"></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+          <input type="text" id="agendaIcon"  placeholder="🎰" style="width:52px; text-align:center;" />
+          <input type="text" id="agendaTime"  placeholder="7:00 PM" style="width:90px;" />
+          <input type="text" id="agendaTitle" placeholder="Activity (e.g. Lucky Draw)" style="flex:2; min-width:120px;" />
+          <button class="btn btn-teal" id="addAgendaItemBtn" style="flex:0 0 auto; padding:9px 14px;">+ Add</button>
+        </div>
+        <input type="text" id="agendaDesc" placeholder="Short description (optional)" style="margin-bottom:10px;" />
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-gold btn-block" id="saveAgendaBtn">Save agenda to staff feed</button>
+        </div>
+        <p class="muted" id="agendaStatus" style="font-size:12px; margin-top:6px; min-height:1em;"></p>
+      </div>
+
     </div>
 
   </div>
@@ -466,13 +484,21 @@ function showBanner(msg) {
   console.error("Firebase:", msg);
 }
 async function ensureAuth() {
-  if (auth.currentUser) return auth.currentUser;
-  try {
-    const cred = await signInAnonymously(auth);
-    return cred.user;
-  } catch(e) {
-    throw new Error("Anonymous Authentication failed — make sure it is enabled in your Firebase console under Authentication → Sign-in method. Details: " + e.message);
-  }
+  // onAuthStateChanged fires once immediately with the auth state Firebase
+  // restores from localStorage — this avoids the race where auth.currentUser
+  // is null on page-load even though a session already exists.
+  return new Promise((resolve, reject) => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      unsub();
+      if (user) { resolve(user); return; }
+      try {
+        const cred = await signInAnonymously(auth);
+        resolve(cred.user);
+      } catch(e) {
+        reject(new Error("Anonymous Auth failed — enable it in Firebase console → Authentication → Sign-in method. " + e.message));
+      }
+    });
+  });
 }
 
 /* ===================== PIN gate ===================== */
@@ -1706,6 +1732,62 @@ document.getElementById("saveEventNameBtn").addEventListener("click", async () =
     await setDoc(doc(db, "state", "config"), { eventName: name }, { merge: true });
     document.getElementById("topEventName").textContent = name;
     toast("Event name updated.");
+  } catch(e) { toast("Failed: " + e.message); }
+});
+
+/* ── Agenda editor ── */
+let agendaItems = [];
+
+function renderAgendaEditor() {
+  const el = document.getElementById("agendaEditorList");
+  if (!el) return;
+  if (agendaItems.length === 0) {
+    el.innerHTML = '<p class="muted" style="font-size:13px;">No items yet — add below.</p>';
+    return;
+  }
+  el.innerHTML = agendaItems.map((item, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+      <span style="font-size:20px;flex:0 0 auto;">${item.icon||""}</span>
+      <span class="mono muted" style="font-size:12px;flex:0 0 70px;">${escapeHtml(item.time||"")}</span>
+      <span style="flex:1;font-size:14px;font-weight:600;">${escapeHtml(item.title)}</span>
+      ${item.desc?`<span class="muted" style="font-size:11px;flex:0 0 100%;padding-left:30px;">${escapeHtml(item.desc)}</span>`:""}
+      <div style="display:flex;gap:4px;flex:0 0 auto;">
+        <button class="btn btn-ghost" data-ag-up="${i}" style="font-size:11px;padding:3px 7px;" ${i===0?"disabled":""}>↑</button>
+        <button class="btn btn-ghost" data-ag-dn="${i}" style="font-size:11px;padding:3px 7px;" ${i===agendaItems.length-1?"disabled":""}>↓</button>
+        <button class="btn btn-ghost" data-ag-del="${i}" style="font-size:11px;padding:3px 7px;color:var(--red);">✕</button>
+      </div>
+    </div>`).join("");
+  el.querySelectorAll("[data-ag-del]").forEach(b => b.addEventListener("click", () => {
+    agendaItems.splice(Number(b.dataset.agDel), 1); renderAgendaEditor();
+  }));
+  el.querySelectorAll("[data-ag-up]").forEach(b => b.addEventListener("click", () => {
+    const i = Number(b.dataset.agUp); if (i===0) return;
+    [agendaItems[i-1],agendaItems[i]]=[agendaItems[i],agendaItems[i-1]]; renderAgendaEditor();
+  }));
+  el.querySelectorAll("[data-ag-dn]").forEach(b => b.addEventListener("click", () => {
+    const i = Number(b.dataset.agDn); if (i>=agendaItems.length-1) return;
+    [agendaItems[i],agendaItems[i+1]]=[agendaItems[i+1],agendaItems[i]]; renderAgendaEditor();
+  }));
+}
+
+document.getElementById("addAgendaItemBtn")?.addEventListener("click", () => {
+  const time  = document.getElementById("agendaTime").value.trim();
+  const icon  = document.getElementById("agendaIcon").value.trim();
+  const title = document.getElementById("agendaTitle").value.trim();
+  const desc  = document.getElementById("agendaDesc").value.trim();
+  if (!title) { toast("Enter an activity title."); return; }
+  agendaItems.push({ time, icon, title, desc });
+  renderAgendaEditor();
+  ["agendaTitle","agendaDesc"].forEach(id => document.getElementById(id).value = "");
+});
+
+document.getElementById("saveAgendaBtn")?.addEventListener("click", async () => {
+  try {
+    await ensureAuth();
+    await setDoc(doc(db, "state", "agenda"), { items: agendaItems });
+    document.getElementById("agendaStatus").textContent = "✅ Agenda saved!";
+    toast("Agenda saved to Firestore.");
+    setTimeout(() => { const el = document.getElementById("agendaStatus"); if(el) el.textContent=""; }, 3000);
   } catch(e) { toast("Failed: " + e.message); }
 });
 

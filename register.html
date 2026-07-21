@@ -9,76 +9,130 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="firebase-config.js"></script>
 <style>
-  .stage { max-width: 460px; margin: 0 auto; padding: 40px 20px 80px; }
-  .logo { text-align: center; margin-bottom: 28px; }
-  .logo .display { font-size: 38px; color: var(--gold); }
-  .logo .eyebrow { margin-top: 4px; }
+  body { padding-bottom: 20px; }
+  .stage { max-width: 460px; margin: 0 auto; padding: 28px 16px 40px; }
+  .logo { text-align: center; margin-bottom: 24px; }
+  .logo .display { font-size: 36px; color: var(--gold); }
   .step { display: none; }
   .step.active { display: block; }
-  .qr-box { background: #fff; padding: 18px; border-radius: 12px; display: inline-block; }
+  .qr-box { background: #fff; padding: 14px; border-radius: 12px; display: inline-block; }
   .pass { text-align: center; }
-  .pass .display { font-size: 30px; margin: 18px 0 4px; }
-  .pill-row { display: flex; gap: 10px; margin-top: 18px; }
-  .pill-row button { flex: 1; }
+  .pass .display { font-size: 26px; margin: 14px 0 4px; }
   .gender-pick { display: flex; gap: 10px; margin-top: 10px; }
-  .gender-pick button { flex: 1; padding: 20px; font-size: 16px; }
-  .gender-pick button.selected.male { background: var(--teal); color: #002b26; }
+  .gender-pick button { flex: 1; padding: 18px; font-size: 15px; }
+  .gender-pick button.selected.male   { background: var(--teal); color: #002b26; }
   .gender-pick button.selected.female { background: var(--pink); color: #2a0010; }
-  .joined-tag { display:inline-flex; align-items:center; gap:6px; color: var(--teal); font-size: 13px; font-family: var(--font-mono); margin-top: 10px; }
-  .joined-tag::before { content: "✓"; }
-  .checkin-flash {
-    text-align:center; padding: 10px 0 0;
+  .joined-tag { display:inline-flex; align-items:center; gap:6px; color:var(--teal); font-size:13px; font-family:var(--font-mono); margin-top:10px; }
+  .joined-tag::before { content:"✓"; }
+
+  /* ── live feed ── */
+  .live-tabs-r {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    margin: 14px 0 0;
   }
+  .live-tab-r {
+    flex: 1; padding: 11px 4px; text-align: center;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; border: none; background: transparent;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  .live-tab-r.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .live-panel-r { display: none; padding: 12px 0 0; }
+  .live-panel-r.active { display: block; }
+
+  .mode-strip {
+    text-align: center; padding: 10px 14px; border-radius: 10px;
+    font-family: var(--font-display); font-size: 16px; letter-spacing: .05em;
+    margin-bottom: 10px; transition: background .3s;
+    background: var(--surface-2); color: var(--text-muted);
+  }
+  .mode-strip.draw    { background: rgba(232,184,75,.12); color: var(--gold); }
+  .mode-strip.karaoke { background: rgba(255,77,141,.12); color: var(--pink); }
+  .mode-strip.quiz    { background: rgba(54,214,197,.12);  color: var(--teal); }
+  .mode-strip.awards  { background: rgba(54,214,197,.12);  color: var(--teal); }
+
+  .ann-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 14px; margin-bottom: 10px;
+    animation: slideIn .3s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-6px);} to{opacity:1;transform:translateY(0);} }
+  .ann-card.gold   { border-color: rgba(232,184,75,.4); background: rgba(232,184,75,.07); }
+  .ann-card.pink   { border-color: rgba(255,77,141,.4); background: rgba(255,77,141,.07); }
+  .ann-card.teal   { border-color: rgba(54,214,197,.4); background: rgba(54,214,197,.07); }
+  .ann-label { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 2px; }
+  .ann-name  { font-family: var(--font-display); font-size: 22px; }
+  .ann-name.gold  { color: var(--gold); }
+  .ann-name.teal  { color: var(--teal); }
+  .ann-name.pink  { color: var(--pink); }
+  .ann-sub   { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+  .agenda-item-r {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .agenda-item-r:last-child { border-bottom: none; }
+  .ag-icon  { font-size: 18px; flex: 0 0 24px; margin-top: 2px; }
+  .ag-time  { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); flex: 0 0 56px; padding-top: 3px; }
+  .ag-title { font-size: 14px; font-weight: 600; }
+  .ag-desc  { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+  .lb-row-r { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .lb-row-r:last-child { border-bottom: none; }
+  .lb-rank-r { font-family: var(--font-display); font-size: 20px; color: var(--text-muted); width: 28px; text-align: center; flex-shrink: 0; }
+  .lb-rank-r.top { color: var(--gold); }
+  .lb-name-r  { flex: 1; font-size: 14px; }
+  .lb-pts-r   { font-family: var(--font-mono); font-size: 13px; color: var(--teal); }
+
+  .empty-state { text-align: center; color: var(--text-muted); font-size: 13px; padding: 28px 0; }
 </style>
 </head>
 <body>
-
 <div class="stage">
   <div class="logo">
     <div class="display" id="eventName">Event Check-In</div>
-    <div class="eyebrow">Staff Night Registration</div>
+    <div class="eyebrow">Staff Registration</div>
   </div>
 
-  <!-- STEP 1: registration form -->
+  <!-- STEP 1: form -->
   <div class="step active" id="step-form">
     <div class="card">
-      <h2 style="font-size:20px; margin-bottom:4px;">Welcome 👋</h2>
-      <p class="muted" style="margin:0 0 4px; font-size:14px;">Fill this in once — you'll get a pass that works for check-in, karaoke and the quiz.</p>
-
+      <h2 style="font-size:19px; margin-bottom:4px;">Welcome 👋</h2>
+      <p class="muted" style="margin:0 0 16px; font-size:14px;">Fill this in once — you'll get a pass for check-in, karaoke, the quiz, and tonight's live feed.</p>
       <label for="staffId">Staff ID</label>
       <input id="staffId" type="text" autocomplete="off" placeholder="e.g. ST-1042" />
-
-      <label for="name">Full name</label>
+      <label for="name" style="margin-top:12px;">Full name</label>
       <input id="name" type="text" autocomplete="off" placeholder="e.g. Aisha Hassan" />
-
-      <label for="contact">Contact number</label>
+      <label for="contact" style="margin-top:12px;">Contact number</label>
       <input id="contact" type="tel" autocomplete="off" placeholder="e.g. 7712345" />
-
-      <button class="btn btn-gold btn-block" style="margin-top:22px;" id="submitBtn">Check in</button>
+      <button class="btn btn-gold btn-block" style="margin-top:20px;" id="submitBtn">Check in &amp; get my pass</button>
       <p class="muted" id="formError" style="font-size:13px; margin-top:10px; min-height:1px;"></p>
     </div>
   </div>
 
-  <!-- STEP 2: pass + activity opt-ins -->
+  <!-- STEP 2: pass + activities + live feed -->
   <div class="step" id="step-pass">
+
+    <!-- Pass card -->
     <div class="card pass">
       <div class="badge live" style="margin-bottom:8px;">CHECKED IN</div>
       <div class="display" id="passName">—</div>
       <div class="muted mono" id="passStaffId" style="font-size:13px;">—</div>
-      <div style="margin-top:18px;">
-        <div class="qr-box"><div id="qrcode"></div></div>
-      </div>
-      <p class="muted" style="font-size:12px; margin-top:14px;">This is your event pass. Keep this page open or screenshot the code.</p>
+      <div style="margin-top:16px;"><div class="qr-box"><div id="qrcode"></div></div></div>
+      <p class="muted" style="font-size:12px; margin-top:12px;">Keep this page open tonight — everything is here.</p>
     </div>
 
-    <div class="card" style="margin-top:14px;">
-      <div class="eyebrow" style="margin-bottom:10px;">Karaoke night</div>
+    <!-- Karaoke opt-in -->
+    <div class="card" style="margin-top:12px;">
+      <div class="eyebrow" style="margin-bottom:10px;">🎤 Karaoke night</div>
       <div id="karaokeJoined" style="display:none;">
         <p style="margin:0;">You're in! Watch the big screen for your pairing &amp; song.</p>
         <div class="joined-tag" id="karaokeGenderTag"></div>
       </div>
       <div id="karaokeForm">
-        <p class="muted" style="font-size:14px; margin:0 0 8px;">Join the lineup — we pair one guy with one girl and assign you a song.</p>
+        <p class="muted" style="font-size:14px; margin:0 0 8px;">Join the lineup — paired one guy with one girl, assigned a song.</p>
         <div class="gender-pick">
           <button id="pickMale" class="btn">🕺 Male</button>
           <button id="pickFemale" class="btn">💃 Female</button>
@@ -87,220 +141,391 @@
       </div>
     </div>
 
-    <div class="card" style="margin-top:14px;">
-      <div class="eyebrow" style="margin-bottom:10px;">Fun quiz</div>
+    <!-- Quiz opt-in -->
+    <div class="card" style="margin-top:12px;">
+      <div class="eyebrow" style="margin-bottom:10px;">🧠 Quiz night</div>
       <div id="quizJoined" style="display:none;">
-        <p style="margin:0;">You're in the quiz! Head to the quiz screen when it starts.</p>
+        <p style="margin:0;">You're in the quiz!</p>
         <a href="quiz-play.html" class="btn btn-teal btn-block" style="margin-top:10px; display:block;">Open quiz screen</a>
       </div>
       <div id="quizForm">
-        <p class="muted" style="font-size:14px; margin:0 0 10px;">Quickest correct answers win — no extra info needed, just your name.</p>
+        <p class="muted" style="font-size:14px; margin:0 0 10px;">Quickest correct answers win — no extra setup needed.</p>
         <button class="btn btn-teal btn-block" id="joinQuizBtn">Join the quiz</button>
       </div>
     </div>
 
-    <div class="card" style="margin-top:14px;">
-      <div class="eyebrow" style="margin-bottom:10px;">Event feed</div>
-      <p class="muted" style="font-size:14px; margin:0 0 10px;">See live announcements — lucky draw winners, award winners, quiz results, and tonight's agenda.</p>
-      <a href="live.html" class="btn btn-gold btn-block" style="display:block;">📡 Open live feed</a>
+    <!-- ── Live feed ── -->
+    <div class="card" style="margin-top:12px; padding-bottom:4px;">
+      <div class="eyebrow">📡 Event live feed</div>
+      <div id="modeBanner" class="mode-strip" style="margin-top:10px;">Standby — event starting soon</div>
+
+      <div class="live-tabs-r">
+        <button class="live-tab-r active" data-rtab="r-feed">Live</button>
+        <button class="live-tab-r" data-rtab="r-agenda">Agenda</button>
+        <button class="live-tab-r" data-rtab="r-quiz">Quiz</button>
+      </div>
+
+      <!-- Live announcements -->
+      <div id="r-feed" class="live-panel-r active">
+        <div id="rFeedList"><div class="empty-state">Waiting for announcements…</div></div>
+      </div>
+
+      <!-- Agenda -->
+      <div id="r-agenda" class="live-panel-r">
+        <div id="rAgendaList"><div class="empty-state">Loading agenda…</div></div>
+      </div>
+
+      <!-- Quiz leaderboard -->
+      <div id="r-quiz" class="live-panel-r">
+        <div id="rLeaderboard"><div class="empty-state">Quiz hasn't started yet.</div></div>
+      </div>
     </div>
-  </div>
-</div>
+
+  </div><!-- /step-pass -->
+</div><!-- /stage -->
 
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, query, where, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, getDoc, serverTimestamp,
+  collection, query, where, limit, orderBy, getDocs, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, signInAnonymously, onAuthStateChanged }
+                             from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 document.getElementById("eventName").textContent = window.EVENT_NAME || "Event Check-In";
 
-const app = initializeApp(window.FIREBASE_CONFIG);
-const db = getFirestore(app);
+const app  = initializeApp(window.FIREBASE_CONFIG);
+const db   = getFirestore(app);
 const auth = getAuth(app);
 
 function toast(msg) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
+  t.textContent = msg; t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2400);
 }
-
 function showStep(id) {
   document.querySelectorAll(".step").forEach(s => s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
-
 function genId() {
   return "att_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// Wait for Firebase Auth SDK to restore persisted session, then sign in if needed
 async function ensureAuth() {
-  return new Promise(resolve => {
-    onAuthStateChanged(auth, user => {
-      if (user) resolve(user);
-      else signInAnonymously(auth).catch(err => { console.error(err); toast("Connection error — check your internet."); });
+  return new Promise((resolve, reject) => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      unsub();
+      if (user) { resolve(user); return; }
+      try { resolve((await signInAnonymously(auth)).user); }
+      catch(e) { reject(e); toast("Connection error — check your internet."); }
     });
   });
 }
 
-function renderQr(attendeeId) {
+// ── Tabs ──
+document.querySelectorAll(".live-tab-r").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".live-tab-r").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".live-panel-r").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.rtab).classList.add("active");
+  });
+});
+
+// ── Pass & QR ──
+function renderQr(id) {
   const el = document.getElementById("qrcode");
   el.innerHTML = "";
-  // eslint-disable-next-line no-undef
-  new QRCode(el, { text: attendeeId, width: 180, height: 180, colorDark: "#0b0e14", colorLight: "#ffffff" });
+  new QRCode(el, { text: id, width: 160, height: 160, colorDark: "#0b0e14", colorLight: "#ffffff" });
 }
 
-async function loadAttendeeIntoPass(attendeeId, data) {
-  document.getElementById("passName").textContent = data.name;
+async function loadPass(attendeeId, data) {
+  document.getElementById("passName").textContent   = data.name;
   document.getElementById("passStaffId").textContent = data.staffId;
   renderQr(attendeeId);
   showStep("step-pass");
 
-  // reflect karaoke state
-  const kSnap = await getDoc(doc(db, "karaoke_participants", attendeeId));
+  const [kSnap, qSnap] = await Promise.all([
+    getDoc(doc(db, "karaoke_participants", attendeeId)),
+    getDoc(doc(db, "quiz_participants",    attendeeId)),
+  ]);
   if (kSnap.exists()) {
-    document.getElementById("karaokeForm").style.display = "none";
+    document.getElementById("karaokeForm").style.display   = "none";
     document.getElementById("karaokeJoined").style.display = "block";
     const g = kSnap.data().gender;
     document.getElementById("karaokeGenderTag").textContent = g === "male" ? "Registered as Male" : "Registered as Female";
   }
-
-  const qSnap = await getDoc(doc(db, "quiz_participants", attendeeId));
   if (qSnap.exists()) {
-    document.getElementById("quizForm").style.display = "none";
+    document.getElementById("quizForm").style.display   = "none";
     document.getElementById("quizJoined").style.display = "block";
   }
+  startLiveFeed();
 }
 
-let currentAttendeeId = localStorage.getItem("attendeeId");
-let currentName = "";
+// ── Gender / Karaoke ──
 let selectedGender = null;
-
 document.getElementById("pickMale").addEventListener("click", () => {
   selectedGender = "male";
-  document.getElementById("pickMale").classList.add("selected", "male");
-  document.getElementById("pickFemale").classList.remove("selected", "female");
-  const btn = document.getElementById("joinKaraokeBtn");
-  btn.disabled = false;
-  btn.textContent = "Join as Male";
+  document.getElementById("pickMale").classList.add("selected","male");
+  document.getElementById("pickFemale").classList.remove("selected","female");
+  const b = document.getElementById("joinKaraokeBtn"); b.disabled = false; b.textContent = "Join as Male";
 });
 document.getElementById("pickFemale").addEventListener("click", () => {
   selectedGender = "female";
-  document.getElementById("pickFemale").classList.add("selected", "female");
-  document.getElementById("pickMale").classList.remove("selected", "male");
-  const btn = document.getElementById("joinKaraokeBtn");
-  btn.disabled = false;
-  btn.textContent = "Join as Female";
+  document.getElementById("pickFemale").classList.add("selected","female");
+  document.getElementById("pickMale").classList.remove("selected","male");
+  const b = document.getElementById("joinKaraokeBtn"); b.disabled = false; b.textContent = "Join as Female";
 });
-
 document.getElementById("joinKaraokeBtn").addEventListener("click", async () => {
   if (!selectedGender || !currentAttendeeId) return;
   try {
     await setDoc(doc(db, "karaoke_participants", currentAttendeeId), {
-      attendeeId: currentAttendeeId,
-      name: currentName,
-      gender: selectedGender,
-      paired: false,
-      pairId: null,
-      joinedAt: serverTimestamp()
+      attendeeId: currentAttendeeId, name: currentName, gender: selectedGender,
+      paired: false, pairId: null, joinedAt: serverTimestamp()
     });
-    document.getElementById("karaokeForm").style.display = "none";
+    document.getElementById("karaokeForm").style.display   = "none";
     document.getElementById("karaokeJoined").style.display = "block";
     document.getElementById("karaokeGenderTag").textContent = selectedGender === "male" ? "Registered as Male" : "Registered as Female";
     toast("You're on the karaoke lineup 🎤");
-  } catch (e) {
-    console.error(e);
-    toast("Couldn't join karaoke — try again.");
-  }
+  } catch(e) { toast("Couldn't join karaoke — try again."); }
 });
-
 document.getElementById("joinQuizBtn").addEventListener("click", async () => {
   if (!currentAttendeeId) return;
   try {
     await setDoc(doc(db, "quiz_participants", currentAttendeeId), {
-      attendeeId: currentAttendeeId,
-      name: currentName,
-      totalScore: 0,
-      joinedAt: serverTimestamp()
+      attendeeId: currentAttendeeId, name: currentName, totalScore: 0, joinedAt: serverTimestamp()
     });
-    document.getElementById("quizForm").style.display = "none";
+    document.getElementById("quizForm").style.display   = "none";
     document.getElementById("quizJoined").style.display = "block";
     toast("You're in the quiz 🧠");
-  } catch (e) {
-    console.error(e);
-    toast("Couldn't join the quiz — try again.");
-  }
+  } catch(e) { toast("Couldn't join the quiz — try again."); }
 });
+
+// ── Registration ──
+let currentAttendeeId = localStorage.getItem("attendeeId");
+let currentName = "";
 
 document.getElementById("submitBtn").addEventListener("click", async () => {
   const staffId = document.getElementById("staffId").value.trim();
-  const name = document.getElementById("name").value.trim();
+  const name    = document.getElementById("name").value.trim();
   const contact = document.getElementById("contact").value.trim();
-  const errEl = document.getElementById("formError");
-
-  if (!staffId || !name || !contact) {
-    errEl.textContent = "Please fill in all three fields.";
-    return;
-  }
+  const errEl   = document.getElementById("formError");
+  if (!staffId || !name || !contact) { errEl.textContent = "Please fill in all three fields."; return; }
   errEl.textContent = "";
   const btn = document.getElementById("submitBtn");
-  btn.disabled = true;
-  btn.textContent = "Checking in…";
-
+  btn.disabled = true; btn.textContent = "Checking in…";
   try {
     await ensureAuth();
-
-    // Look up by Staff ID first so re-registering (e.g. on a new phone, or
-    // a refreshed page) resumes the same pass instead of creating a
-    // duplicate entry — important since duplicates would mean extra
-    // lucky draw chances for the same person.
-    const existingQ = query(collection(db, "attendees"), where("staffId", "==", staffId), limit(1));
-    const existingSnap = await getDocs(existingQ);
-
+    const existingSnap = await getDocs(query(collection(db,"attendees"), where("staffId","==",staffId), limit(1)));
     let attendeeId;
     if (!existingSnap.empty) {
       attendeeId = existingSnap.docs[0].id;
-      await setDoc(doc(db, "attendees", attendeeId), { name, contact }, { merge: true });
+      await setDoc(doc(db,"attendees",attendeeId), { name, contact }, { merge: true });
       toast("Welcome back — resuming your pass.");
     } else {
       attendeeId = genId();
-      await setDoc(doc(db, "attendees", attendeeId), {
+      await setDoc(doc(db,"attendees",attendeeId), {
         attendeeId, staffId, name, contact,
-        checkedIn: true,
-        checkedInAt: serverTimestamp(),
-        registeredAt: serverTimestamp(),
-        source: "self"
+        checkedIn: true, checkedInAt: serverTimestamp(), registeredAt: serverTimestamp(), source: "self"
       });
       toast("Checked in — welcome!");
     }
-
     localStorage.setItem("attendeeId", attendeeId);
     currentAttendeeId = attendeeId;
     currentName = name;
-    await loadAttendeeIntoPass(attendeeId, { staffId, name });
-  } catch (e) {
+    await loadPass(attendeeId, { staffId, name });
+  } catch(e) {
     console.error(e);
-    errEl.textContent = "Something went wrong. Check your connection and try again.";
-    btn.disabled = false;
-    btn.textContent = "Check in";
+    errEl.textContent = "Something went wrong. Check your connection.";
+    btn.disabled = false; btn.textContent = "Check in & get my pass";
   }
 });
 
-// On load: if this device already registered, skip straight to the pass
-(async function init() {
-  await ensureAuth();
-  if (currentAttendeeId) {
-    const snap = await getDoc(doc(db, "attendees", currentAttendeeId));
-    if (snap.exists()) {
-      currentName = snap.data().name;
-      await loadAttendeeIntoPass(currentAttendeeId, snap.data());
-      return;
-    }
+// ── Live feed ──
+let announcements = [];
+const announcedIds = new Set();
+
+function addAnnouncement(id, type, label, name, sub) {
+  if (announcedIds.has(id)) return;
+  announcedIds.add(id);
+  announcements.unshift({ id, type, label, name, sub, t: new Date() });
+  renderAnnouncements();
+}
+
+function renderAnnouncements() {
+  const el = document.getElementById("rFeedList");
+  if (announcements.length === 0) {
+    el.innerHTML = '<div class="empty-state">Waiting for announcements…</div>'; return;
   }
-  showStep("step-form");
+  el.innerHTML = announcements.map(a => `
+    <div class="ann-card ${a.type}">
+      <div class="ann-label">${a.label} · ${a.t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="ann-name ${a.type}">${a.name}</div>
+      ${a.sub ? `<div class="ann-sub">${a.sub}</div>` : ""}
+    </div>`).join("");
+}
+
+const modeMap = {
+  idle:       { text: "Standby — event starting soon", cls: "" },
+  lucky_draw: { text: "🎰  Lucky Draw is live",         cls: "draw" },
+  karaoke:    { text: "🎤  Karaoke night is on",         cls: "karaoke" },
+  quiz:       { text: "🧠  Quiz night — check your tab", cls: "quiz" },
+  awards:     { text: "🏆  Staff awards ceremony",       cls: "awards" },
+};
+
+function updateModeBanner(mode) {
+  const b = document.getElementById("modeBanner");
+  const m = modeMap[mode] || modeMap.idle;
+  b.textContent = m.text;
+  b.className = "mode-strip " + m.cls;
+}
+
+function renderAgenda(items) {
+  const el = document.getElementById("rAgendaList");
+  if (!items || items.length === 0) {
+    el.innerHTML = '<div class="empty-state">No agenda set yet.</div>'; return;
+  }
+  el.innerHTML = items.map(item => `
+    <div class="agenda-item-r">
+      <div class="ag-icon">${item.icon || "📌"}</div>
+      <div class="ag-time">${item.time || ""}</div>
+      <div><div class="ag-title">${item.title}</div>${item.desc ? `<div class="ag-desc">${item.desc}</div>` : ""}</div>
+    </div>`).join("");
+}
+
+function updateLeaderboard() {
+  let snap;
+  try {
+    getDocs(query(collection(db,"quiz_participants"), orderBy("totalScore","desc"), limit(20)))
+      .then(snap => {
+        if (snap.empty) { document.getElementById("rLeaderboard").innerHTML = '<div class="empty-state">Quiz hasn\'t started yet.</div>'; return; }
+        document.getElementById("rLeaderboard").innerHTML =
+          [...snap.docs].map((d,i) => {
+            const p = d.data();
+            const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1);
+            return `<div class="lb-row-r"><div class="lb-rank-r ${i<3?'top':''}">${medal}</div><div class="lb-name-r">${p.name||"—"}</div><div class="lb-pts-r">${p.totalScore||0} pts</div></div>`;
+          }).join("");
+      }).catch(() => {});
+  } catch(e) {}
+}
+
+let liveFeedStarted = false;
+function startLiveFeed() {
+  if (liveFeedStarted) return;
+  liveFeedStarted = true;
+
+  // Mode banner
+  onSnapshot(doc(db,"state","display"), snap => {
+    updateModeBanner(snap.exists() ? snap.data().mode : "idle");
+  }, () => {});
+
+  // Agenda
+  onSnapshot(doc(db,"state","agenda"), snap => {
+    if (snap.exists() && snap.data().items) renderAgenda(snap.data().items);
+    else renderAgenda([]);
+  }, () => {});
+
+  // Lucky draw winners
+  let lastDrawWinner = null;
+  onSnapshot(doc(db,"state","lucky_draw"), snap => {
+    if (!snap.exists()) return;
+    const s = snap.data();
+    if (s.status === "revealed" && s.winnerName && s.winnerName !== lastDrawWinner) {
+      lastDrawWinner = s.winnerName;
+      addAnnouncement("draw_" + s.winnerName + "_" + (s.startedAtMs||0),
+        "gold", "🎰 Lucky Draw Winner", s.winnerName,
+        s.winnerStaffId ? "Staff ID: " + s.winnerStaffId : "");
+    }
+  }, () => {});
+
+  // Karaoke final winner
+  let karaokeAnnounced = false;
+  onSnapshot(doc(db,"state","karaoke"), snap => {
+    if (!snap.exists()) return;
+    const s = snap.data();
+    if (s.phase === "final" && !karaokeAnnounced) {
+      karaokeAnnounced = true;
+      getDocs(query(collection(db,"karaoke_pairs"), orderBy("totalScore","desc"), limit(1))).then(pairs => {
+        if (pairs.empty) return;
+        const w = pairs.docs[0].data();
+        addAnnouncement("karaoke_winner", "pink", "🎤 Karaoke Night Winner",
+          `${w.maleName} & ${w.femaleName}`, `Song: ${w.song||""} · Score: ${(w.totalScore||0).toFixed(1)}`);
+      }).catch(() => {});
+    }
+  }, () => {});
+
+  // Quiz — fastest per question + final winner
+  const announcedQs = new Set();
+  onSnapshot(doc(db,"state","quiz"), snap => {
+    if (!snap.exists()) return;
+    const s = snap.data();
+    if (s.status === "question_ended" && s.lastResult?.fastestName) {
+      const qKey = "quiz_q" + s.batchNumber;
+      if (!announcedQs.has(qKey)) {
+        announcedQs.add(qKey);
+        addAnnouncement(qKey, "teal",
+          "⚡ Fastest Answer — Q" + s.batchNumber, s.lastResult.fastestName,
+          "Answered in " + ((s.lastResult.fastestTimeMs||0)/1000).toFixed(1) + "s");
+      }
+    }
+    if (s.status === "finished") {
+      updateLeaderboard();
+      getDocs(query(collection(db,"quiz_participants"), orderBy("totalScore","desc"), limit(1)))
+        .then(snap => {
+          if (snap.empty) return;
+          const w = snap.docs[0].data();
+          addAnnouncement("quiz_final_winner", "teal", "🏆 Quiz Night Winner",
+            w.name, "Final score: " + (w.totalScore||0) + " pts");
+        }).catch(() => {});
+    }
+  }, () => {});
+
+  // Awards
+  const announcedAwards = new Set();
+  onSnapshot(doc(db,"state","awards"), async snap => {
+    if (!snap.exists()) return;
+    const s = snap.data();
+    if (s.status !== "revealed" && s.status !== "finished") return;
+    try {
+      const cats = await getDocs(collection(db,"award_cats"));
+      cats.forEach(d => {
+        const cat = d.data();
+        if (!cat.revealed || announcedAwards.has(d.id)) return;
+        announcedAwards.add(d.id);
+        const winners = cat.winners?.length ? cat.winners : (cat.presetWinner ? [cat.presetWinner] : []);
+        if (!winners.length) return;
+        addAnnouncement("award_" + d.id, "teal", "🏆 " + cat.name,
+          winners.map(w => w.name).join(" & "), winners[0]?.dept || "");
+      });
+    } catch(e) {}
+  }, () => {});
+
+  // Poll leaderboard every 20s
+  setInterval(updateLeaderboard, 20_000);
+}
+
+// ── Init: restore session on load ──
+(async function init() {
+  try {
+    await ensureAuth();
+    if (currentAttendeeId) {
+      const snap = await getDoc(doc(db,"attendees",currentAttendeeId));
+      if (snap.exists()) {
+        currentName = snap.data().name;
+        await loadPass(currentAttendeeId, snap.data());
+        return;
+      }
+    }
+    showStep("step-form");
+  } catch(e) {
+    console.error(e);
+    showStep("step-form");
+  }
 })();
 </script>
 </body>
