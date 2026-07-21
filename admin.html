@@ -551,8 +551,14 @@ async function boot() {
   booted = true;
   try {
     await ensureAuth();
-    await initialLoad();   // getDocs — always works after auth, no WebSocket needed
-    watchAttendees();      // onSnapshot — live updates on top
+    // Brief pause — ensures the auth token is fully propagated to Firestore
+    // before we fire the first getDocs. Without this, the first load can
+    // race the token and return empty even though auth succeeded.
+    await new Promise(r => setTimeout(r, 400));
+    await initialLoad();
+    // Retry once at 2s in case of residual auth-token delay
+    setTimeout(() => initialLoad().catch(e => console.warn('retry:', e)), 2000);
+    watchAttendees();
     watchDraw();
     watchKaraoke();
     watchQuiz();
@@ -572,12 +578,18 @@ async function boot() {
 /* One-shot getDocs load — plain HTTP, no WebSocket, runs once after auth */
 async function initialLoad() {
   // Basic collections — no orderBy, always safe
-  const [aSnap, kpSnap, qpSnap, ksSnap] = await Promise.all([
+  let aSnap, kpSnap, qpSnap, ksSnap;
+  try {
+    [aSnap, kpSnap, qpSnap, ksSnap] = await Promise.all([
     getDocs(collection(db, "attendees")),
     getDocs(collection(db, "karaoke_participants")),
     getDocs(collection(db, "quiz_participants")),
-    getDocs(collection(db, "karaoke_songs")),
-  ]);
+      getDocs(collection(db, "karaoke_songs")),
+    ]);
+  } catch(e) {
+    showBanner("Firestore read failed: " + e.message + " — check security rules and anonymous auth.");
+    throw e;
+  }
   // orderBy queries isolated — a missing Firestore index won't kill the whole load
   let kpairSnap, qqSnap;
   try { kpairSnap = await getDocs(query(collection(db,"karaoke_pairs"), orderBy("createdAt","asc"))); }
@@ -1211,6 +1223,12 @@ document.getElementById("quizNextBtn").addEventListener("click", async () => {
   const questionStartedAtMs = Date.now();
 
   await updateDoc(doc(db, "quiz_questions", next.id), { used: true });
+  // Update local array IMMEDIATELY — onSnapshot may be slow, so without this
+  // the next click would still find the same question (used: false locally).
+  const qIdx = quizQuestions.findIndex(q => q.id === next.id);
+  if (qIdx >= 0) quizQuestions[qIdx] = { ...quizQuestions[qIdx], used: true };
+  renderQuestionRows();
+
   await setDoc(doc(db, "state", "quiz"), {
     status: "running", currentQuestionId: next.id, questionStartedAtMs, durationSec, batchNumber, lastResult: null
   });
@@ -1235,7 +1253,7 @@ async function endQuestion(questionId, startedAtMs, durationSec) {
     const answersSnap = await getDocs(collection(db, "quiz_answers"));
     const answers = answersSnap.docs
       .map(d => d.data())
-      .filter(a => a.questionId === questionId && a.selectedIndex === q.correctIndex)
+      .filter(a => a.questionId === questionId && Number(a.selectedIndex) === Number(q.correctIndex))
       .sort((a, b) => (a.clientTimeTakenMs || 0) - (b.clientTimeTakenMs || 0));
 
     const batch = writeBatch(db);
@@ -1273,7 +1291,7 @@ function renderQuizStatus() {
 
     if (quizTimeoutHandle) { clearTimeout(quizTimeoutHandle); quizTimeoutHandle = null; }
     if (s.questionStartedAtMs) {
-      const remaining = (s.questionStartedAtMs + (s.durationSec || 15) * 1000 + 300) - Date.now();
+      const remaining = (s.questionStartedAtMs + (s.durationSec || 15) * 1000 + 1500) - Date.now();
       if (remaining <= 0) endQuestion(s.currentQuestionId, s.questionStartedAtMs, s.durationSec);
       else quizTimeoutHandle = setTimeout(() => endQuestion(s.currentQuestionId, s.questionStartedAtMs, s.durationSec), remaining);
     }

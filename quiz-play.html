@@ -95,10 +95,12 @@ function show(id) {
 }
 
 async function ensureAuth() {
-  return new Promise(resolve => {
-    onAuthStateChanged(auth, user => {
-      if (user) resolve(user);
-      else signInAnonymously(auth).catch(console.error);
+  return new Promise((resolve, reject) => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      unsub();
+      if (user) { resolve(user); return; }
+      try { resolve((await signInAnonymously(auth)).user); }
+      catch(e) { reject(e); }
     });
   });
 }
@@ -222,16 +224,19 @@ async function submitAnswer(questionId, selectedIndex, startedAtMs) {
   document.getElementById("lockedMsg").style.display = "block";
 
   const answerId = questionId + "_" + attendeeId;
+  const clientTimeTakenMs = Date.now() - startedAtMs;
   try {
     await setDoc(doc(db, "quiz_answers", answerId), {
-      questionId, attendeeId, name: myName,
-      selectedIndex,
+      questionId,
+      attendeeId,
+      name: myName,
+      selectedIndex: Number(selectedIndex),   // store as number always
       answeredAtClientMs: Date.now(),
-      clientTimeTakenMs: Date.now() - startedAtMs,
+      clientTimeTakenMs,
       answeredAtServer: serverTimestamp()
     });
   } catch (e) {
-    console.error(e);
+    console.error("submitAnswer failed:", e);
   }
 }
 
