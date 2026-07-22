@@ -604,24 +604,101 @@ function startLiveFeed(attendeeId, myName) {
     } catch(e){}
   }, ()=>{});
 
-  // ── Karaoke tab (pair scores) ──
+  // ── Karaoke tab: voting when live + scores ──
+  let tabVotePairId = null;
+  let tabVotedPairId = null;
+
   onSnapshot(doc(db,"state","karaoke"), async snap => {
     if (!snap.exists()) return;
     const s = snap.data();
     const el = document.getElementById("rKaraokeTabContent");
-    if (s.phase==="lobby") { el.innerHTML='<div class="empty-msg">Karaoke night coming up!</div>'; return; }
+    if (s.phase==="lobby" || !s.currentPairId) {
+      el.innerHTML = '<div class="empty-msg">Karaoke night coming up!</div>'; return;
+    }
+
+    let pairHtml = "";
+    if (s.phase==="performing" && s.currentPairId) {
+      try {
+        const pSnap = await getDoc(doc(db,"karaoke_pairs",s.currentPairId));
+        if (pSnap.exists()) {
+          const p = pSnap.data();
+          const isPerformer = attendeeId && (p.maleId===attendeeId || p.femaleId===attendeeId);
+          tabVotePairId = s.currentPairId;
+
+          if (isPerformer) {
+            pairHtml = `<div class="ann-card pink" style="padding:12px 14px;margin-bottom:10px;">
+              <div class="ann-label">🎤 ON STAGE NOW</div>
+              <div class="ann-title pink">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
+              <div class="ann-sub">${esc(p.song||"")} · Give it your best!</div>
+            </div>`;
+          } else if (tabVotedPairId === s.currentPairId) {
+            pairHtml = `<div class="ann-card plain" style="padding:12px 14px;margin-bottom:10px;">
+              <div class="ann-label">🎤 NOW PERFORMING</div>
+              <div class="ann-title" style="color:var(--pink);">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
+              <div class="ann-sub" style="color:var(--teal);">✓ Your vote is in!</div>
+            </div>`;
+          } else {
+            // Show voting in the tab
+            pairHtml = `<div class="ann-card pink" style="padding:14px;margin-bottom:10px;">
+              <div class="ann-label">🎤 NOW PERFORMING — Vote!</div>
+              <div class="ann-title pink" style="margin-bottom:10px;">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Performance</div>
+              <div class="vote-row"><input type="range" id="tabVotePerf" min="1" max="10" value="7" style="flex:1;accent-color:var(--pink);"/><div class="vote-val" id="tabVotePerfVal" style="color:var(--pink);">7</div></div>
+              <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px;">Singing</div>
+              <div class="vote-row"><input type="range" id="tabVoteSing" min="1" max="10" value="7" style="flex:1;accent-color:var(--pink);"/><div class="vote-val" id="tabVoteSingVal" style="color:var(--pink);">7</div></div>
+              <button class="btn btn-pink btn-block" id="tabSubmitVote" style="margin-top:12px;">Submit vote ⭐</button>
+            </div>`;
+          }
+        }
+      } catch(e){}
+    }
+
+    // Scores table
+    let scoresHtml = "";
     try {
       const pairs = await getDocs(collection(db,"karaoke_pairs"));
       const done = []; pairs.forEach(d => { if(d.data().status==="done") done.push({id:d.id,...d.data()}); });
       done.sort((a,b)=>(b.totalScore||0)-(a.totalScore||0));
-      if (!done.length) { el.innerHTML='<div class="empty-msg">Scores will appear after each pair performs.</div>'; return; }
-      el.innerHTML = done.map((p,i) => `
-        <div class="ann-card plain" style="padding:10px 14px;">
-          <div class="ann-label">${["🥇","🥈","🥉"][i]||"#"+(i+1)}</div>
-          <div class="ann-title" style="font-size:17px;color:var(--pink);">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
-          <div class="ann-sub">${esc(p.song||"")} · Score: ${(p.totalScore||0).toFixed(1)}</div>
-        </div>`).join("");
+      if (done.length) {
+        scoresHtml = done.map((p,i) => `
+          <div class="ann-card plain" style="padding:9px 14px;margin-bottom:8px;">
+            <div class="ann-label">${["🥇","🥈","🥉"][i]||"#"+(i+1)}</div>
+            <div class="ann-title" style="font-size:16px;color:var(--pink);">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
+            <div class="ann-sub">${esc(p.song||"")} · ${(p.totalScore||0).toFixed(1)} pts</div>
+          </div>`).join("");
+      } else if (!pairHtml) {
+        scoresHtml = '<div class="empty-msg">Scores appear after each pair performs.</div>';
+      }
     } catch(e){}
+
+    el.innerHTML = pairHtml + scoresHtml;
+
+    // Wire up tab voting sliders + button
+    if (pairHtml.includes("tabSubmitVote")) {
+      ["tabVotePerf","tabVoteSing"].forEach(id => {
+        const sl = document.getElementById(id);
+        const vl = document.getElementById(id+"Val");
+        if (sl && vl) sl.addEventListener("input", () => { vl.textContent = sl.value; });
+      });
+      const submitBtn = document.getElementById("tabSubmitVote");
+      if (submitBtn) {
+        submitBtn.addEventListener("click", async () => {
+          if (!attendeeId || !tabVotePairId) return;
+          submitBtn.disabled = true; submitBtn.textContent = "Submitting…";
+          const perf = Number(document.getElementById("tabVotePerf")?.value || 7);
+          const sing = Number(document.getElementById("tabVoteSing")?.value || 7);
+          try {
+            await setDoc(doc(db,"karaoke_votes",tabVotePairId+"_"+attendeeId), {
+              pairId:tabVotePairId, voterId:attendeeId,
+              performance:perf, singing:sing, votedAt:serverTimestamp()
+            });
+            tabVotedPairId = tabVotePairId;
+            toast("Vote submitted! ⭐");
+            submitBtn.textContent = "✓ Vote in!";
+          } catch(e) { submitBtn.disabled=false; submitBtn.textContent="Submit vote ⭐"; toast("Error — try again"); }
+        });
+      }
+    }
   }, ()=>{});
 
   // ── Quiz tab (leaderboard) + Quiz Night section ──
