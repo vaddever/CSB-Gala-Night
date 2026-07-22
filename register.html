@@ -531,8 +531,64 @@ function startLiveFeed(attendeeId, myName) {
     }
   }, ()=>{});
 
-  // Awards
+  // Awards — card with congrats button
   const announcedAwards = new Set();
+  const congratulated   = new Set();
+
+  function addAwardCard(catId, category, winnerName, dept) {
+    const feedEl = document.getElementById("rFeedList");
+    if (feedEl.querySelector(".empty-msg")) feedEl.innerHTML = "";
+    const already = congratulated.has(catId);
+    const card = document.createElement("div");
+    card.className = "ann-card teal";
+    card.innerHTML = `
+      <div class="ann-label">🏆 ${esc(category)} · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="ann-title teal">${esc(winnerName)}</div>
+      ${dept ? `<div class="ann-sub">${esc(dept)}</div>` : ""}
+      <button class="btn btn-gold btn-block" style="margin-top:12px;font-size:15px;" id="cbtn-${catId}"
+        ${already ? "disabled" : ""}>
+        ${already ? "✓ Congratulated! 🎉" : `🎉 Congratulate ${esc(winnerName)}!`}
+      </button>
+      <div id="ccount-${catId}" style="font-size:11px;text-align:center;margin-top:6px;color:var(--text-muted);min-height:14px;"></div>`;
+    if (already) {
+      const b = card.querySelector("#cbtn-"+catId);
+      b.style.background = "var(--teal)"; b.style.color = "#002b26";
+    }
+    feedEl.prepend(card);
+    // Switch to Live tab so the card is visible
+    document.querySelectorAll(".rtab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".rpanel").forEach(p => p.classList.remove("active"));
+    const liveTab = document.querySelector('[data-rtab="r-live"]');
+    if (liveTab) liveTab.classList.add("active");
+    document.getElementById("r-live").classList.add("active");
+
+    const btn = card.querySelector("#cbtn-"+catId);
+    if (btn && !already) {
+      btn.addEventListener("click", async () => {
+        if (!attendeeId) { toast("Register first to congratulate."); return; }
+        if (congratulated.has(catId)) return;
+        congratulated.add(catId);
+        btn.disabled = true;
+        btn.textContent = "✓ Congratulated! 🎉";
+        btn.style.background = "var(--teal)";
+        btn.style.color = "#002b26";
+        toast("🎉 Sent!");
+        try {
+          await setDoc(doc(db,"congrats",catId+"_"+attendeeId), {
+            catId, fromName: myName, fromId: attendeeId,
+            winnerName, category, sentAt: serverTimestamp()
+          });
+        } catch(e) { console.error(e); }
+      });
+    }
+    // Live count
+    onSnapshot(query(collection(db,"congrats"),where("catId","==",catId)), snap => {
+      const el = document.getElementById("ccount-"+catId);
+      if (el) el.textContent = snap.size > 0
+        ? `🎉 ${snap.size} colleague${snap.size===1?"":"s"} celebrated!` : "";
+    }, ()=>{});
+  }
+
   onSnapshot(doc(db,"state","awards"), async snap => {
     if (!snap.exists()||!["revealed","finished"].includes(snap.data().status)) return;
     try {
@@ -543,7 +599,7 @@ function startLiveFeed(attendeeId, myName) {
         announcedAwards.add(d.id);
         const winners = cat.winners?.length ? cat.winners : (cat.presetWinner?[cat.presetWinner]:[]);
         if (!winners.length) return;
-        addAnn("award_"+d.id,"teal","🏆 "+cat.name,winners.map(w=>w.name).join(" & "),winners[0]?.dept||"");
+        addAwardCard(d.id, cat.name, winners.map(w=>w.name).join(" & "), winners[0]?.dept||"");
       });
     } catch(e){}
   }, ()=>{});
