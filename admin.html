@@ -82,6 +82,22 @@
   .danger-zone { border: 1px dashed var(--red); border-radius: var(--radius); padding: 16px; margin-top: 24px; }
   .danger-zone .eyebrow { color: var(--red); }
 
+  /* ── Award presentation board ── */
+  .ab-card { border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px; transition:border-color .2s,background .2s; }
+  .ab-card.ab-active { border-color:var(--teal); background:rgba(54,214,197,.04); }
+  .ab-card.ab-done   { border-color:rgba(54,214,197,.3); opacity:.65; }
+  .ab-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; }
+  .ab-name   { font-size:15px; font-weight:600; flex:1; }
+  .ab-badge  { font-family:var(--font-mono); font-size:11px; padding:3px 8px; border-radius:100px; flex:0 0 auto; }
+  .ab-badge.pend { color:var(--text-muted); border:1px solid var(--border); }
+  .ab-badge.act  { color:var(--teal); border:1px solid var(--teal); }
+  .ab-badge.done { color:var(--teal); background:rgba(54,214,197,.12); }
+  .ab-nominees { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px; }
+  .nom-chip { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:8px; border:1px solid var(--border); font-size:13px; cursor:pointer; transition:border-color .15s,background .15s; }
+  .nom-chip input[type=radio] { width:auto; cursor:pointer; }
+  .nom-chip.sel { border-color:var(--gold); background:rgba(232,184,75,.1); }
+  .nom-chip-img { width:24px; height:24px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+
   /* ── YouTube thumbnails ── */
   .song-thumb { width: 52px; height: 36px; object-fit: cover; border-radius: 5px; vertical-align: middle; margin-right: 8px; background: var(--surface-2); }
   .song-thumb-placeholder { display:inline-block; width:52px; height:36px; border-radius:5px; background: var(--surface-2); vertical-align:middle; margin-right:8px; }
@@ -298,59 +314,62 @@
     <!-- ===================== AWARDS ===================== -->
     <div class="panel" id="panel-awards">
 
-      <div class="grid" style="grid-template-columns: 1fr 1fr;">
-        <div class="card">
-          <!-- Source sub-tabs -->
-          <div class="row" style="margin-bottom:18px; gap:6px;">
+      <div class="grid" style="grid-template-columns: 1fr 1.4fr; align-items: start;">
+
+        <!-- LEFT: award setup -->
+        <div class="card" style="max-height:600px; overflow-y:auto;">
+          <div class="row" style="margin-bottom:14px; gap:6px;">
             <button class="btn sub-tab active" id="awardsTabManual" style="font-size:13px; padding:8px 14px;">Add manually</button>
-            <button class="btn sub-tab" id="awardsTabPortal" style="font-size:13px; padding:8px 14px;">From voting portal</button>
+            <button class="btn sub-tab" id="awardsTabPortal" style="font-size:13px; padding:8px 14px;">From portal</button>
           </div>
 
-          <!-- Manual section (default) -->
           <div id="awardsSectionManual">
             <div class="row" style="gap:8px;">
               <input type="text" id="manualAwardName" placeholder="Award name e.g. Best Employee" />
-              <button class="btn btn-teal" id="addManualAwardBtn" style="flex:0 0 auto; white-space:nowrap;">+ Add award</button>
+              <button class="btn btn-teal" id="addManualAwardBtn" style="flex:0 0 auto; white-space:nowrap;">+ Add</button>
             </div>
-            <div id="manualAwardsList" style="margin-top:14px; max-height:380px; overflow-y:auto;">
-              <p class="muted" style="font-size:13px;">No awards added yet.</p>
+            <div id="manualAwardsList" style="margin-top:14px;">
+              <p class="muted" style="font-size:13px;">No awards added yet. Type a name and click + Add.</p>
             </div>
-            <button class="btn btn-teal btn-block" id="useManualAwardsBtn" style="margin-top:14px; display:none;">Push to display screen →</button>
+            <button class="btn btn-gold btn-block" id="useManualAwardsBtn" style="margin-top:14px; display:none;">
+              Push to presentation board →
+            </button>
           </div>
 
-          <!-- Portal section (hidden by default) -->
           <div id="awardsSectionPortal" style="display:none;">
             <label for="gasUrl">Voting portal GAS URL</label>
             <input type="url" id="gasUrl" placeholder="https://script.google.com/macros/s/…/exec" />
-            <label for="gasYear" style="margin-top:12px;">Filter by year (optional)</label>
+            <label for="gasYear" style="margin-top:12px;">Year (optional)</label>
             <input type="text" id="gasYear" placeholder="e.g. 2026" style="max-width:140px;" />
-            <button class="btn btn-teal btn-block" id="fetchWinnersBtn" style="margin-top:16px;">Fetch winners from portal</button>
-            <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:10px; min-height:1em;"></p>
+            <button class="btn btn-teal btn-block" id="fetchWinnersBtn" style="margin-top:14px;">Fetch from portal</button>
+            <p class="muted" id="fetchStatus" style="font-size:13px; margin-top:8px; min-height:1em;"></p>
           </div>
         </div>
 
+        <!-- RIGHT: presentation board -->
         <div class="card">
-          <div class="eyebrow">Live controls</div>
-          <div class="big-status" id="awardsStatus"><div class="display muted">Idle</div></div>
-          <p class="muted" id="awardsProgress" style="font-size:13px; margin-top:6px;"></p>
-          <div class="row" style="margin-top:14px; flex-wrap:wrap; gap:8px;">
-            <button class="btn btn-teal" id="awardsCeremonyBtn">Start ceremony</button>
-            <button class="btn btn-teal" id="awardsRevealBtn">Reveal winner ✨</button>
+          <div class="section-title" style="margin-bottom:14px;">
+            <div class="eyebrow">Presentation board</div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost" id="awardsFinishBtn" style="font-size:12px; padding:7px 12px;">End ceremony 🏁</button>
+              <button class="btn btn-ghost" id="awardsResetBtn" style="font-size:12px; padding:7px 12px;">Reset all ↺</button>
+            </div>
           </div>
-          <div class="row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">
-            <button class="btn btn-ghost" id="awardsNextBtn">Next award →</button>
-            <button class="btn btn-ghost" id="awardsFinishBtn">End ceremony 🏁</button>
+          <div id="presentationBoard">
+            <p class="muted" style="font-size:13px;">Add awards on the left, then click "Push to presentation board →".</p>
           </div>
-          <button class="btn btn-ghost btn-block" id="awardsResetBtn" style="margin-top:10px;">Reset to idle</button>
+          <!-- hidden compat elements so old JS doesn't crash -->
+          <div style="display:none;">
+            <div id="awardsStatus"></div>
+            <div id="awardsProgress"></div>
+            <button id="awardsCeremonyBtn"></button>
+            <button id="awardsRevealBtn"></button>
+            <button id="awardsNextBtn"></button>
+            <button id="pushToDisplayBtn"></button>
+            <div id="awardsPreview"></div>
+          </div>
         </div>
-      </div>
 
-      <div class="card" style="margin-top:18px;">
-        <div class="section-title">
-          <div class="eyebrow">Award categories preview</div>
-          <button class="btn btn-teal" id="pushToDisplayBtn" style="display:none;">Push to display screen</button>
-        </div>
-        <div id="awardsPreview"><p class="muted">Fetch winners from the portal, or add awards manually above.</p></div>
       </div>
 
     </div>
@@ -1619,6 +1638,8 @@ document.getElementById("useManualAwardsBtn").addEventListener("click", async ()
     // Reset local revealed state so next push starts clean
     manualAwards.forEach(a => { a.revealed = false; a.winners = []; });
     saveAwards();
+    boardCatIds = categoryIds;
+    renderPresentationBoard();
     // Show preview immediately
     renderAwardsPreview(manualAwards.map(a => ({
       name: a.name, nominees: a.nominees, winners: a.winners || [],
@@ -2008,53 +2029,198 @@ document.getElementById("clearAllAttendeesBtn").addEventListener("click", async 
   } catch(e) { toast("Failed: "+e.message); console.error(e); }
 });
 
-// ── Live status watcher ──
-function watchAwards() {
-  onSnapshot(doc(db, "state", "awards"), async snap => {
-    const el = document.getElementById("awardsStatus");
-    const prog = document.getElementById("awardsProgress");
-    if (!snap.exists()) { el.innerHTML = `<div class="display muted">Idle</div>`; prog.textContent = ""; return; }
-    const s = snap.data();
-    const catIds = s.categoryIds || [];
-    const total = s.totalCategories || catIds.length;
-    const idx = s.currentIndex || 0;
-    const catId = catIds[idx];
+// ── Presentation board ──────────────────────────────────────────────
+// Renders each award as a card with: Present → Select winner → Reveal
 
-    // Fetch current category for live nominee list
-    let cat = null;
-    if (catId) {
-      const cs = await getDoc(doc(db, "award_cats", catId));
-      if (cs.exists()) cat = cs.data();
-    }
+let boardCatIds  = [];   // categoryIds from state/awards
+let boardCurrent = null; // catId currently on display
+let boardStatus  = "idle"; // current awards state
 
-    if (s.status === "idle") {
-      el.innerHTML = `<div class="display muted">Idle</div>`;
-      prog.textContent = catIds.length ? `${catIds.length} awards ready` : "No awards loaded yet";
-    } else if (s.status === "category" && cat) {
-      el.innerHTML = `
-        <div class="display" style="color:var(--teal); font-size:28px;">${escapeHtml(cat.name)}</div>
-        <p class="muted" style="font-size:12px; margin-top:8px;">Tick winner(s) then press Reveal — or leave blank to auto-pick highest votes:</p>
-        <div style="margin-top:10px; text-align:left; max-height:200px; overflow-y:auto;">
-          ${(cat.nominees||[]).map(n => `
-            <label style="display:flex; align-items:center; gap:8px; padding:7px 0; cursor:pointer; border-bottom:1px solid var(--border);">
-              <input type="checkbox" class="award-nominee-cb" value="${n.id}" style="width:auto; flex:0 0 auto;" />
-              ${n.photoBase64 ? `<img src="${n.photoBase64}" style="width:30px;height:30px;object-fit:cover;border-radius:50%;flex:0 0 auto;" />` : ""}
-              <span style="flex:1; font-size:13px;">${escapeHtml(n.name)}${n.dept ? ` <span class="muted">(${escapeHtml(n.dept)})</span>` : ""}</span>
-              <span class="mono muted" style="font-size:12px;">${n.votes ? n.votes + " votes" : ""}</span>
+function renderPresentationBoard() {
+  const board = document.getElementById("presentationBoard");
+  if (!board) return;
+  if (!boardCatIds.length) {
+    board.innerHTML = '<p class="muted" style="font-size:13px;">Add awards on the left, then click "Push to presentation board →".</p>';
+    return;
+  }
+
+  board.innerHTML = "";
+  boardCatIds.forEach((catId, i) => {
+    // Find matching local award
+    const local = manualAwards.find(a => a.id === catId) || null;
+    const isActive   = boardCurrent === catId && (boardStatus === "category" || boardStatus === "revealed");
+    const isRevealed = local ? (local.revealed || false) : false;
+    const winners    = local ? (local.winners || []) : [];
+
+    const card = document.createElement("div");
+    card.className = "ab-card" + (isRevealed ? " ab-done" : isActive ? " ab-active" : "");
+
+    let badgeHtml = "";
+    if (isRevealed)     badgeHtml = '<span class="ab-badge done">✓ Done</span>';
+    else if (isActive && boardStatus === "revealed") badgeHtml = '<span class="ab-badge act">Revealing…</span>';
+    else if (isActive)  badgeHtml = '<span class="ab-badge act">● On display</span>';
+    else                badgeHtml = '<span class="ab-badge pend">Pending</span>';
+
+    const name = local ? local.name : catId;
+    const nominees = local ? (local.nominees || []) : [];
+
+    let bodyHtml = "";
+    if (isRevealed) {
+      // Done state
+      const winnerNames = winners.map(w => w.name).join(" & ") || "—";
+      bodyHtml = `
+        <div style="color:var(--teal);font-family:var(--font-display);font-size:18px;margin-bottom:10px;">🏆 ${escapeHtml(winnerNames)}</div>
+        <button class="btn btn-ghost" data-ab-reset="${catId}" style="font-size:12px;padding:6px 12px;">↺ Reset this award</button>`;
+    } else if (isActive && boardStatus === "category") {
+      // On display — select winner and reveal
+      bodyHtml = `<p class="muted" style="font-size:12px;margin:0 0 8px;">Select the winner then reveal:</p>
+        <div class="ab-nominees" id="ab-noms-${catId}">
+          ${nominees.map(n => `
+            <label class="nom-chip" id="nomchip-${catId}-${n.id}">
+              <input type="radio" name="abwinner-${catId}" value="${n.id}" />
+              ${n.photoBase64 ? `<img src="${n.photoBase64}" class="nom-chip-img" />` : ""}
+              ${escapeHtml(n.name)}
+              ${n.votes ? `<span class="muted" style="font-size:11px;">(${n.votes}v)</span>` : ""}
             </label>`).join("")}
+        </div>
+        <div class="row" style="gap:8px;">
+          <button class="btn btn-gold" data-ab-reveal="${catId}" style="flex:1;">🏆 Reveal winner</button>
+          <button class="btn btn-ghost" data-ab-unshow="${catId}" style="font-size:12px;padding:7px 10px;">◀ Back</button>
         </div>`;
-      prog.textContent = `Award ${idx+1} of ${total}`;
-    } else if (s.status === "revealed" && cat) {
-      const winners = cat.winners || [];
-      el.innerHTML = `<div class="display" style="color:var(--teal); font-size:24px;">🏆 ${escapeHtml(winners.map(w=>w.name).join(" & ") || "—")}</div>
-        <p class="muted" style="font-size:13px; margin-top:6px;">${escapeHtml(cat.name)}</p>`;
-      prog.textContent = `Award ${idx+1} of ${total}`;
-    } else if (s.status === "finished") {
-      el.innerHTML = `<div class="display" style="color:var(--teal);">Ceremony complete 🏁</div>`;
-      prog.textContent = `All ${total} awards announced`;
+    } else {
+      // Pending — show nominees list and present button
+      const nomNames = nominees.map(n => n.name).join(", ") || "No nominees yet";
+      bodyHtml = `
+        <p class="muted" style="font-size:12px;margin:0 0 10px;">${escapeHtml(nomNames)}</p>
+        <button class="btn btn-teal btn-block" data-ab-present="${catId}" data-ab-idx="${i}">
+          ▶ Present on display
+        </button>`;
     }
+
+    card.innerHTML = `
+      <div class="ab-header">
+        <div class="ab-name">${escapeHtml(name)}</div>
+        ${badgeHtml}
+      </div>
+      ${bodyHtml}`;
+
+    board.appendChild(card);
+  });
+
+  // Wire up nomination radio chip styling
+  board.querySelectorAll(".nom-chip").forEach(chip => {
+    const radio = chip.querySelector("input[type=radio]");
+    radio?.addEventListener("change", () => {
+      // style all chips for this award
+      const name = radio.name;
+      board.querySelectorAll(`input[name="${name}"]`).forEach(r => {
+        r.closest(".nom-chip")?.classList.toggle("sel", r.checked);
+      });
+    });
+  });
+
+  // ── Present button ──
+  board.querySelectorAll("[data-ab-present]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const catId = btn.dataset.abPresent;
+      const idx   = Number(btn.dataset.abIdx);
+      btn.disabled = true; btn.textContent = "Opening…";
+      try {
+        await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: idx });
+        await setDisplayMode("awards");
+        toast("Presenting: " + (manualAwards.find(a=>a.id===catId)?.name || catId));
+      } catch(e) { toast("Error: " + e.message); btn.disabled = false; btn.textContent = "▶ Present on display"; }
+    });
+  });
+
+  // ── Reveal winner button ──
+  board.querySelectorAll("[data-ab-reveal]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const catId = btn.dataset.abReveal;
+      const checked = board.querySelector(`input[name="abwinner-${catId}"]:checked`);
+      const local = manualAwards.find(a => a.id === catId);
+      let winners;
+
+      if (checked && local) {
+        const winner = local.nominees.find(n => n.id === checked.value);
+        winners = winner ? [winner] : [];
+      } else if (local) {
+        // auto-pick highest votes, or first nominee
+        const maxVotes = Math.max(...(local.nominees||[]).map(n=>n.votes||0), 0);
+        winners = maxVotes > 0
+          ? local.nominees.filter(n=>(n.votes||0)===maxVotes)
+          : local.nominees.slice(0,1);
+      } else { winners = []; }
+
+      if (!winners.length) { toast("Select a winner first (or add nominees)."); return; }
+      btn.disabled = true; btn.textContent = "Revealing…";
+      try {
+        await updateDoc(doc(db, "award_cats", catId), { winners, revealed: true });
+        await updateDoc(doc(db, "state", "awards"), { status: "revealed" });
+        // Update local state
+        const ai = manualAwards.findIndex(a => a.id === catId);
+        if (ai >= 0) { manualAwards[ai].winners = winners; manualAwards[ai].revealed = true; saveAwards(); }
+        toast("🏆 " + winners.map(w=>w.name).join(" & "));
+        renderManualList(); renderPresentationBoard();
+      } catch(e) { toast("Error: " + e.message); btn.disabled=false; btn.textContent="🏆 Reveal winner"; }
+    });
+  });
+
+  // ── Back button (unshow) ──
+  board.querySelectorAll("[data-ab-unshow]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await setDoc(doc(db,"state","awards"),{status:"idle"});
+      await setDisplayMode("idle");
+      boardCurrent=null; boardStatus="idle";
+      renderPresentationBoard();
+    });
+  });
+
+  // ── Reset individual award ──
+  board.querySelectorAll("[data-ab-reset]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Reset this award? The winner will be unannounced.")) return;
+      const catId = btn.dataset.abReset;
+      try {
+        await updateDoc(doc(db,"award_cats",catId), { revealed:false, winners:[] });
+        const ai = manualAwards.findIndex(a=>a.id===catId);
+        if (ai>=0){ manualAwards[ai].revealed=false; manualAwards[ai].winners=[]; saveAwards(); }
+        // If this was the current revealed award, go back to idle
+        if (boardCurrent === catId) {
+          await setDoc(doc(db,"state","awards"),{status:"idle",currentIndex:boardCatIds.indexOf(catId),categoryIds:boardCatIds,totalCategories:boardCatIds.length});
+          boardCurrent=null; boardStatus="idle";
+        }
+        toast("Award reset.");
+        renderManualList(); renderPresentationBoard();
+      } catch(e){ toast("Error: " + e.message); }
+    });
   });
 }
-</script>
-</body>
-</html>
+
+function watchAwards() {
+  onSnapshot(doc(db, "state", "awards"), snap => {
+    if (!snap.exists()) { boardStatus="idle"; boardCurrent=null; return; }
+    const s = snap.data();
+    boardCatIds  = s.categoryIds || [];
+    boardStatus  = s.status || "idle";
+    boardCurrent = (s.categoryIds||[])[s.currentIndex||0] || null;
+    renderPresentationBoard();
+    // Also sync revealed state from Firestore back to local
+    if (s.status === "revealed" && boardCurrent) {
+      const ai = manualAwards.findIndex(a => a.id === boardCurrent);
+      if (ai >= 0 && !manualAwards[ai].revealed) {
+        getDoc(doc(db,"award_cats",boardCurrent)).then(cs => {
+          if (cs.exists() && cs.data().revealed) {
+            manualAwards[ai].revealed = true;
+            manualAwards[ai].winners  = cs.data().winners || [];
+            saveAwards();
+            renderManualList();
+            renderPresentationBoard();
+          }
+        }).catch(()=>{});
+      }
+    }
+  }, err => console.warn("awards watcher:", err));
+}
+
+
