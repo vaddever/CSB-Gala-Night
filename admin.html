@@ -231,7 +231,8 @@
           <div class="eyebrow">Pairing</div>
           <p class="muted" id="pairingCounts" style="font-size:14px; margin: 10px 0;">Loading signups…</p>
           <button class="btn btn-pink btn-block" id="generatePairsBtn">Auto-generate pairs</button>
-          <button class="btn btn-ghost btn-block" id="resetKaraokeBtn" style="margin-top:10px;">Reset karaoke night</button>
+          <button class="btn btn-ghost btn-block" id="repairAllBtn" style="margin-top:8px;">↺ Delete &amp; re-pair all</button>
+          <button class="btn btn-ghost btn-block" id="resetKaraokeBtn" style="margin-top:8px;">✕ Reset karaoke night</button>
         </div>
       </div>
 
@@ -1038,7 +1039,10 @@ function renderPairRows() {
       </div>
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <span class="status-tag ${p.status}">${p.status}</span>
-        ${p.status === "pending" ? `<button class="btn btn-pink" data-stage="${p.id}" style="font-size:12px; padding:7px 12px;">Put on stage</button>` : ""}
+        ${p.status === "pending" ? `
+          <button class="btn btn-pink" data-stage="${p.id}" style="font-size:12px; padding:7px 12px;">Put on stage</button>
+          <button class="btn btn-ghost" data-unpair="${p.id}" style="font-size:12px; padding:7px 10px;" title="Remove pair & restore participants">Unpair</button>
+        ` : ""}
         ${p.status === "performing" ? `
           <span class="mono muted" id="votecount-${p.id}" style="font-size:12px;">0 votes</span>
           ${hasVideo ? `<div class="video-controls"><button class="btn btn-play" data-play="${p.id}" style="font-size:12px; padding:7px 12px;">▶ Play</button><button class="btn btn-pause" data-pause="${p.id}" style="font-size:12px; padding:7px 12px;">⏸</button></div>` : ""}
@@ -1051,6 +1055,7 @@ function renderPairRows() {
 
   wrap.querySelectorAll("[data-stage]").forEach(btn => btn.addEventListener("click", () => stagePair(btn.dataset.stage)));
   wrap.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", () => closeVoting(btn.dataset.close)));
+  wrap.querySelectorAll("[data-unpair]").forEach(btn => btn.addEventListener("click", () => unpairSingle(btn.dataset.unpair)));
   wrap.querySelectorAll("[data-play]").forEach(btn => btn.addEventListener("click", () =>
     updateDoc(doc(db, "state", "karaoke"), { videoPlaying: true })
   ));
@@ -1094,6 +1099,41 @@ async function closeVoting(pairId) {
   await setDoc(doc(db, "state", "karaoke"), { phase: "results", currentPairId: pairId });
   toast("Voting closed — scores locked in.");
 }
+
+async function unpairSingle(pairId) {
+  if (!confirm("Remove this pair and return them to the unpaired pool?")) return;
+  const pair = karaokePairs.find(p => p.id === pairId);
+  if (!pair) return;
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "karaoke_pairs", pairId));
+  // Delete votes for this pair
+  const votesSnap = await getDocs(collection(db, "karaoke_votes"));
+  votesSnap.docs.filter(d => d.data().pairId === pairId).forEach(d => batch.delete(d.ref));
+  // Reset participants
+  if (pair.maleId)   batch.update(doc(db, "karaoke_participants", pair.maleId),   { paired: false, pairId: null });
+  if (pair.femaleId) batch.update(doc(db, "karaoke_participants", pair.femaleId), { paired: false, pairId: null });
+  // Unassign song
+  if (pair.songId) batch.update(doc(db, "karaoke_songs", pair.songId), { assigned: false });
+  await batch.commit();
+  toast("Pair removed — participants returned to pool.");
+  reloadKaraoke();
+}
+
+document.getElementById("repairAllBtn").addEventListener("click", async () => {
+  if (!confirm("Delete ALL current pairs and immediately re-pair? Votes will be lost.")) return;
+  const batch = writeBatch(db);
+  const pairsSnap = await getDocs(collection(db, "karaoke_pairs"));
+  pairsSnap.forEach(d => batch.delete(d.ref));
+  const votesSnap = await getDocs(collection(db, "karaoke_votes"));
+  votesSnap.forEach(d => batch.delete(d.ref));
+  const partSnap = await getDocs(collection(db, "karaoke_participants"));
+  partSnap.forEach(d => batch.update(d.ref, { paired: false, pairId: null }));
+  const songsSnap = await getDocs(collection(db, "karaoke_songs"));
+  songsSnap.forEach(d => batch.update(d.ref, { assigned: false }));
+  await batch.commit();
+  toast("All pairs cleared — click Auto-generate pairs to re-pair.");
+  reloadKaraoke();
+});
 
 document.getElementById("announceWinnerBtn").addEventListener("click", async () => {
   await setDoc(doc(db, "state", "karaoke"), { phase: "final", currentPairId: null });
@@ -1556,8 +1596,8 @@ document.getElementById("useManualAwardsBtn").addEventListener("click", async ()
       batch.set(doc(db, "award_cats", a.id), {
         name: a.name, nominees: a.nominees,
         presetWinner: presetWinner || null,
-        winners: a.winners || [],
-        revealed: a.revealed || false,
+        winners: [],       // always reset — revealed via "Reveal winner" button only
+        revealed: false,   // always reset
         order, totalVotes
       });
     });
@@ -1568,6 +1608,9 @@ document.getElementById("useManualAwardsBtn").addEventListener("click", async ()
     });
     await setDisplayMode("awards");
     toast(`✅ ${manualAwards.length} awards saved & pushed to display.`);
+    // Reset local revealed state so next push starts clean
+    manualAwards.forEach(a => { a.revealed = false; a.winners = []; });
+    saveAwards();
     // Show preview immediately
     renderAwardsPreview(manualAwards.map(a => ({
       name: a.name, nominees: a.nominees, winners: a.winners || [],

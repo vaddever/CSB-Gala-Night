@@ -166,7 +166,7 @@ body { padding-bottom: 40px; }
         <button class="rtab active" data-rtab="r-agenda">Agenda</button>
         <button class="rtab" data-rtab="r-quiz-tab">Quiz</button>
         <button class="rtab" data-rtab="r-karaoke-tab">Karaoke</button>
-        <button class="rtab" data-rtab="r-live">Live</button>
+        <button class="rtab" data-rtab="r-winners">Winners</button>
       </div>
 
       <!-- Agenda -->
@@ -185,8 +185,8 @@ body { padding-bottom: 40px; }
       </div>
 
       <!-- Live announcements -->
-      <div id="r-live" class="rpanel">
-        <div id="rFeedList"><div class="empty-msg">Waiting for announcements…</div></div>
+      <div id="r-winners" class="rpanel">
+        <div id="rWinnersList"><div class="empty-msg">No winners announced yet — check back soon.</div></div>
       </div>
     </div>
 
@@ -519,91 +519,158 @@ function startLiveFeed(attendeeId, myName) {
     if (!el.innerHTML.includes("empty")) return;
   }
 
-  // Lucky draw
+  // ══ WINNERS TAB — all officially revealed winners ══
+  const winnerIds = new Set();
+  const allWinners = [];
+
+  function addWinner(id, type, icon, title, name, sub) {
+    if (winnerIds.has(id)) return;
+    winnerIds.add(id);
+    allWinners.unshift({ id, type, icon, title, name, sub, t: new Date() });
+    renderWinnersTab();
+    // Also auto-switch to Winners tab when a new winner is announced
+    document.querySelectorAll(".rtab").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".rpanel").forEach(p => p.classList.remove("active"));
+    document.querySelector('[data-rtab="r-winners"]').classList.add("active");
+    document.getElementById("r-winners").classList.add("active");
+  }
+
+  function renderWinnersTab() {
+    const el = document.getElementById("rWinnersList");
+    if (!allWinners.length) {
+      el.innerHTML = '<div class="empty-msg">No winners announced yet.</div>'; return;
+    }
+    el.innerHTML = allWinners.map(w => `
+      <div class="ann-card ${w.type}">
+        <div class="ann-label">${w.icon} ${w.title} · ${w.t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="ann-title ${w.type}">${esc(w.name)}</div>
+        ${w.sub ? `<div class="ann-sub">${esc(w.sub)}</div>` : ""}
+      </div>`).join("");
+  }
+
+  // Lucky draw winners
   let lastDrawWinner = null;
   onSnapshot(doc(db,"state","lucky_draw"), snap => {
     if (!snap.exists()) return;
     const s = snap.data();
     if (s.status==="revealed" && s.winnerName && s.winnerName!==lastDrawWinner) {
       lastDrawWinner = s.winnerName;
-      addAnn("draw_"+s.winnerName+"_"+(s.startedAtMs||0), "gold",
-        "🎰 Lucky Draw Winner", s.winnerName, s.winnerStaffId?"ID: "+s.winnerStaffId:"");
+      addWinner("draw_"+s.winnerName+"_"+(s.startedAtMs||0),
+        "gold","🎰","Lucky Draw Winner", s.winnerName, s.winnerStaffId?"ID: "+s.winnerStaffId:"");
     }
   }, ()=>{});
 
-  // Awards — card with congrats button
+  // Karaoke winner (only when final announced)
+  let karaokeWinnerShown = false;
+  onSnapshot(doc(db,"state","karaoke"), snap => {
+    if (!snap.exists()) return;
+    if (snap.data().phase==="final" && !karaokeWinnerShown) {
+      karaokeWinnerShown = true;
+      getDocs(query(collection(db,"karaoke_pairs"),orderBy("totalScore","desc"),limit(1))).then(pairs => {
+        if (pairs.empty) return;
+        const w = pairs.docs[0].data();
+        addWinner("karaoke_winner","pink","🎤","Karaoke Night Winner",
+          w.maleName+" & "+w.femaleName,"Score: "+(w.totalScore||0).toFixed(1)+" · Song: "+esc(w.song||""));
+      }).catch(()=>{});
+    }
+  }, ()=>{});
+
+  // Quiz winner (only when finished)
+  let quizWinnerShown = false;
+  onSnapshot(doc(db,"state","quiz"), snap => {
+    if (!snap.exists()||snap.data().status!=="finished"||quizWinnerShown) return;
+    quizWinnerShown = true;
+    getDocs(query(collection(db,"quiz_participants"),orderBy("totalScore","desc"),limit(1))).then(s => {
+      if (s.empty) return;
+      const w = s.docs[0].data();
+      addWinner("quiz_winner","teal","🧠","Quiz Night Winner",w.name,"Score: "+(w.totalScore||0)+" pts");
+    }).catch(()=>{});
+  }, ()=>{});
+
+  // Award winners — only show AFTER admin clicks Reveal (when revealed:true is set)
   const announcedAwards = new Set();
   const congratulated   = new Set();
 
+  // Watch award_cats collection for changes (revealed:true fires when admin reveals)
+  onSnapshot(collection(db,"award_cats"), snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type !== "added" && ch.type !== "modified") return;
+      const cat = ch.doc.data();
+      if (!cat.revealed || announcedAwards.has(ch.doc.id)) return;
+      announcedAwards.add(ch.doc.id);
+      const winners = cat.winners?.length ? cat.winners : (cat.presetWinner?[cat.presetWinner]:[]);
+      if (!winners.length) return;
+      const winnerName = winners.map(w=>w.name).join(" & ");
+      const dept = winners[0]?.dept||"";
+
+      // Add to Winners tab
+      addWinner("award_"+ch.doc.id,"teal","🏆",cat.name, winnerName, dept);
+
+      // Create award card with congrats button
+      addAwardCard(ch.doc.id, cat.name, winnerName, dept);
+    });
+  }, ()=>{});
+
   function addAwardCard(catId, category, winnerName, dept) {
-    const feedEl = document.getElementById("rFeedList");
-    if (feedEl.querySelector(".empty-msg")) feedEl.innerHTML = "";
+    // Don't duplicate — addWinner already switched tab. Award card is secondary.
+    const wl = document.getElementById("rWinnersList");
+    if (!wl) return;
+    const existing = document.getElementById("cbtn-"+catId);
+    if (existing) return; // already added
     const already = congratulated.has(catId);
     const card = document.createElement("div");
     card.className = "ann-card teal";
     card.innerHTML = `
-      <div class="ann-label">🏆 ${esc(category)} · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-      <div class="ann-title teal">${esc(winnerName)}</div>
-      ${dept ? `<div class="ann-sub">${esc(dept)}</div>` : ""}
-      <button class="btn btn-gold btn-block" style="margin-top:12px;font-size:15px;" id="cbtn-${catId}"
-        ${already ? "disabled" : ""}>
+      <div class="ann-label" style="display:none;">hidden</div>
+      <button class="btn btn-gold btn-block" id="cbtn-${catId}"
+        style="margin-top:8px;font-size:14px;" ${already?"disabled":""}>
         ${already ? "✓ Congratulated! 🎉" : `🎉 Congratulate ${esc(winnerName)}!`}
       </button>
-      <div id="ccount-${catId}" style="font-size:11px;text-align:center;margin-top:6px;color:var(--text-muted);min-height:14px;"></div>`;
-    if (already) {
-      const b = card.querySelector("#cbtn-"+catId);
-      b.style.background = "var(--teal)"; b.style.color = "#002b26";
+      <div id="ccount-${catId}" style="font-size:11px;text-align:center;margin-top:4px;color:var(--text-muted);min-height:14px;"></div>`;
+    card.querySelector("div:first-child").style.display = "none";
+    // Append to the FIRST winners card (find it)
+    const firstCard = wl.querySelector(".ann-card.teal");
+    if (firstCard) firstCard.appendChild(card.querySelector("button"));
+    else {
+      // Append a congrats button below the winners list
+      const btnDiv = document.createElement("div");
+      btnDiv.style.padding = "4px 0";
+      btnDiv.innerHTML = `<button class="btn btn-gold btn-block" id="cbtn-${catId}"
+        style="font-size:14px;" ${already?"disabled":""}>
+        ${already ? "✓ Congratulated! 🎉" : `🎉 Congratulate ${esc(winnerName)}!`}
+      </button>
+      <div id="ccount-${catId}" style="font-size:11px;text-align:center;margin-top:4px;color:var(--text-muted);min-height:14px;"></div>`;
+      wl.appendChild(btnDiv);
     }
-    feedEl.prepend(card);
-    // Switch to Live tab so the card is visible
-    document.querySelectorAll(".rtab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".rpanel").forEach(p => p.classList.remove("active"));
-    const liveTab = document.querySelector('[data-rtab="r-live"]');
-    if (liveTab) liveTab.classList.add("active");
-    document.getElementById("r-live").classList.add("active");
 
-    const btn = card.querySelector("#cbtn-"+catId);
+    const btn = document.getElementById("cbtn-"+catId);
     if (btn && !already) {
       btn.addEventListener("click", async () => {
-        if (!attendeeId) { toast("Register first to congratulate."); return; }
+        if (!attendeeId) { toast("Register first."); return; }
         if (congratulated.has(catId)) return;
         congratulated.add(catId);
-        btn.disabled = true;
-        btn.textContent = "✓ Congratulated! 🎉";
-        btn.style.background = "var(--teal)";
-        btn.style.color = "#002b26";
+        btn.disabled = true; btn.textContent = "✓ Congratulated! 🎉";
+        btn.style.background = "var(--teal)"; btn.style.color = "#002b26";
         toast("🎉 Sent!");
         try {
-          await setDoc(doc(db,"congrats",catId+"_"+attendeeId), {
-            catId, fromName: myName, fromId: attendeeId,
+          // Write to subcollection (no Firestore index needed)
+          await setDoc(doc(db,"award_cats",catId,"congrats",attendeeId), {
+            fromName: myName, fromId: attendeeId,
             winnerName, category, sentAt: serverTimestamp()
           });
         } catch(e) { console.error(e); }
       });
     }
-    // Live count
-    onSnapshot(query(collection(db,"congrats"),where("catId","==",catId)), snap => {
+
+    // Live congrats count using subcollection
+    onSnapshot(collection(db,"award_cats",catId,"congrats"), snap => {
       const el = document.getElementById("ccount-"+catId);
       if (el) el.textContent = snap.size > 0
         ? `🎉 ${snap.size} colleague${snap.size===1?"":"s"} celebrated!` : "";
     }, ()=>{});
   }
 
-  onSnapshot(doc(db,"state","awards"), async snap => {
-    if (!snap.exists()||!["revealed","finished"].includes(snap.data().status)) return;
-    try {
-      const cats = await getDocs(collection(db,"award_cats"));
-      cats.forEach(d => {
-        const cat = d.data();
-        if (!cat.revealed||announcedAwards.has(d.id)) return;
-        announcedAwards.add(d.id);
-        const winners = cat.winners?.length ? cat.winners : (cat.presetWinner?[cat.presetWinner]:[]);
-        if (!winners.length) return;
-        addAwardCard(d.id, cat.name, winners.map(w=>w.name).join(" & "), winners[0]?.dept||"");
-      });
-    } catch(e){}
-  }, ()=>{});
-
+  // ── Karaoke tab: voting when live + scores ──
   // ── Karaoke tab: voting when live + scores ──
   let tabVotePairId = null;
   let tabVotedPairId = null;
