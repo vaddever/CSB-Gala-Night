@@ -123,6 +123,7 @@
     <div class="display" id="topEventName">Event Control Room</div>
     <div class="links">
       <button class="btn btn-ghost" id="showQrBtn">Entrance QR</button>
+      <button class="btn btn-ghost" id="lobbyBtn" title="Return big screen to idle">🏠 Lobby</button>
       <a class="btn btn-ghost" href="display.html" target="_blank">Open big screen ↗</a>
     </div>
   </div>
@@ -530,6 +531,11 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.add("active");
     document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
   });
+});
+
+document.getElementById("lobbyBtn").addEventListener("click", async () => {
+  await setDisplayMode("idle");
+  toast("Display returned to lobby screen.");
 });
 
 /* ===================== Entrance QR modal ===================== */
@@ -1153,6 +1159,7 @@ document.getElementById("resetKaraokeBtn").addEventListener("click", async () =>
   songsSnap.forEach(d => batch.update(d.ref, { assigned: false }));
   await batch.commit();
   await setDoc(doc(db, "state", "karaoke"), { phase: "lobby", currentPairId: null });
+  await setDisplayMode("idle");
   toast("Karaoke night reset.");
   reloadKaraoke();
 });
@@ -1318,6 +1325,7 @@ async function endQuestion(questionId, startedAtMs, durationSec) {
 document.getElementById("quizFinishBtn").addEventListener("click", async () => {
   if (quizTimeoutHandle) { clearTimeout(quizTimeoutHandle); quizTimeoutHandle = null; }
   await updateDoc(doc(db, "state", "quiz"), { status: "finished" });
+  await setDisplayMode("idle");
 });
 
 function renderQuizStatus() {

@@ -1,126 +1,71 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>Event Check-In</title>
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="styles.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="firebase-config.js"></script>
 <style>
-body { padding-bottom: 40px; }
-.stage { max-width: 460px; margin: 0 auto; padding: 24px 14px 40px; }
-
-/* ── logo ── */
-.logo { text-align:center; margin-bottom:20px; }
-.logo .display { font-size:34px; color:var(--gold); }
-
-/* ── steps ── */
-.step { display:none; }
-.step.active { display:block; }
-
-/* ── pass card ── */
-.pass-card {
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:var(--radius); padding:18px; text-align:center;
-  margin-bottom:12px;
-}
-.pass-name   { font-family:var(--font-display); font-size:28px; color:var(--gold); margin:8px 0 2px; }
-.pass-id     { font-family:var(--font-mono); font-size:13px; color:var(--text-muted); }
-.pass-note   { font-size:12px; color:var(--text-muted); margin-top:8px; }
-
-/* ── tabs ── */
-.rtabs {
-  display:flex; border-bottom:2px solid var(--border);
-  position:sticky; top:0; background:var(--bg); z-index:30; margin-bottom:0;
-}
-.rtab {
-  flex:1; padding:10px 4px; text-align:center; font-size:12px;
-  font-weight:600; color:var(--text-muted); cursor:pointer;
-  border:none; background:transparent;
-  border-bottom:2px solid transparent; margin-bottom:-2px;
-  transition:color .15s,border-color .15s;
-}
-.rtab.active { color:var(--gold); border-bottom-color:var(--gold); }
-.rpanel { display:none; padding:14px 0 0; }
-.rpanel.active { display:block; }
-
-/* ── announcement / agenda cards ── */
-.ann-card {
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:10px; padding:12px 14px; margin-bottom:10px;
-  animation:slideIn .3s ease;
-}
-@keyframes slideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
-.ann-card.gold  { border-color:rgba(232,184,75,.4);  background:rgba(232,184,75,.07);  }
-.ann-card.pink  { border-color:rgba(255,77,141,.4);  background:rgba(255,77,141,.07);  }
-.ann-card.teal  { border-color:rgba(54,214,197,.4);  background:rgba(54,214,197,.07);  }
-.ann-card.plain { border-color:var(--border); background:var(--surface); }
-.ann-label { font-size:10px; font-family:var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; margin-bottom:3px; }
-.ann-title { font-family:var(--font-display); font-size:20px; }
-.ann-title.gold { color:var(--gold); }
-.ann-title.teal { color:var(--teal); }
-.ann-title.pink { color:var(--pink); }
-.ann-sub   { font-size:12px; color:var(--text-muted); margin-top:2px; }
-
-/* mode banner */
-.mode-strip {
-  text-align:center; padding:9px 14px; border-radius:10px;
-  font-family:var(--font-display); font-size:15px; letter-spacing:.05em;
-  margin-bottom:12px; background:var(--surface-2); color:var(--text-muted);
-}
-.mode-strip.draw    { background:rgba(232,184,75,.12); color:var(--gold); }
-.mode-strip.karaoke { background:rgba(255,77,141,.12); color:var(--pink); }
-.mode-strip.quiz    { background:rgba(54,214,197,.12);  color:var(--teal); }
-.mode-strip.awards  { background:rgba(54,214,197,.12);  color:var(--teal); }
-
-/* ── section cards ── */
-.section-card {
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:var(--radius); padding:16px; margin-top:12px;
-}
-.section-card .eyebrow { margin-bottom:10px; }
-
-/* ── gender pick ── */
-.gender-pick { display:flex; gap:10px; margin-top:10px; }
-.gender-pick button { flex:1; padding:18px; font-size:15px; }
-.gender-pick button.selected.male   { background:var(--teal); color:#002b26; border-color:var(--teal); }
-.gender-pick button.selected.female { background:var(--pink); color:#2a0010; border-color:var(--pink); }
-.joined-tag { display:inline-flex;align-items:center;gap:6px;color:var(--teal);font-size:13px;font-family:var(--font-mono);margin-top:8px; }
-.joined-tag::before { content:"✓"; }
-
-/* ── quiz inline ── */
-.quiz-opt {
-  display:block; width:100%; text-align:left; padding:13px 16px;
-  margin-bottom:8px; border-radius:10px; font-size:15px;
-  background:var(--surface-2); border:1px solid var(--border);
-  cursor:pointer; transition:border-color .15s, background .15s;
-}
-.quiz-opt:hover:not(:disabled) { border-color:var(--teal); }
-.quiz-opt.selected  { border-color:var(--teal); background:rgba(54,214,197,.1); }
-.quiz-opt.correct   { border-color:var(--teal); background:rgba(54,214,197,.15); }
-.quiz-opt.wrong     { border-color:var(--red); opacity:.6; }
-.quiz-opt:disabled  { cursor:default; }
-.quiz-timer-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-.quiz-timer { font-family:var(--font-mono); font-size:20px; color:var(--teal); }
-.quiz-batch { font-size:11px; font-family:var(--font-mono); color:var(--text-muted); letter-spacing:.1em; }
-
-/* ── karaoke voting sliders ── */
-.vote-label { font-size:13px; margin:12px 0 4px; color:var(--text-muted); }
-.vote-row   { display:flex; align-items:center; gap:10px; }
-.vote-row input[type=range] { flex:1; accent-color:var(--pink); }
-.vote-val   { font-family:var(--font-mono); font-size:16px; color:var(--pink); width:24px; text-align:center; }
-
-/* ── leaderboard ── */
-.lb-row { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border); }
-.lb-row:last-child { border-bottom:none; }
-.lb-rank { font-family:var(--font-display);font-size:18px;color:var(--text-muted);width:26px;text-align:center; }
-.lb-rank.top { color:var(--gold); }
-.lb-name { flex:1;font-size:14px; }
-.lb-pts  { font-family:var(--font-mono);font-size:13px;color:var(--teal); }
-
-.empty-msg { text-align:center;color:var(--text-muted);font-size:13px;padding:24px 0; }
+body{padding-bottom:30px;}
+.stage{max-width:460px;margin:0 auto;padding:20px 14px 40px;}
+.logo{text-align:center;margin-bottom:18px;}
+.logo .display{font-size:32px;color:var(--gold);}
+.step{display:none;}.step.active{display:block;}
+/* pass */
+.pass-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;margin-bottom:10px;}
+.pass-name{font-family:var(--font-display);font-size:26px;color:var(--gold);margin:6px 0 2px;}
+.pass-id{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);}
+/* tabs */
+.rtabs{display:flex;border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:30;}
+.rtab{flex:1;padding:10px 3px;text-align:center;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;border:none;background:transparent;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;}
+.rtab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.rpanel{display:none;padding:12px 0 0;}.rpanel.active{display:block;}
+/* cards in tabs */
+.tab-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;}
+.tab-card .eyebrow{margin-bottom:8px;}
+/* gender pick */
+.gender-pick{display:flex;gap:10px;margin-top:8px;}
+.gender-pick button{flex:1;padding:16px;font-size:14px;}
+.gender-pick button.sel.male{background:var(--teal);color:#002b26;border-color:var(--teal);}
+.gender-pick button.sel.female{background:var(--pink);color:#2a0010;border-color:var(--pink);}
+/* quiz */
+.quiz-opt{display:block;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;border-radius:10px;font-size:14px;background:var(--surface-2);border:1px solid var(--border);cursor:pointer;transition:border-color .15s,background .15s;}
+.quiz-opt:hover:not(:disabled){border-color:var(--teal);}
+.quiz-opt.sel{border-color:var(--teal);background:rgba(54,214,197,.1);}
+.quiz-opt.ok{border-color:var(--teal);background:rgba(54,214,197,.15);}
+.quiz-opt.wrong{border-color:var(--red);opacity:.55;}
+.quiz-opt:disabled{cursor:default;}
+.q-timer{font-family:var(--font-mono);font-size:22px;color:var(--teal);}
+/* voting */
+.vote-row{display:flex;align-items:center;gap:10px;}
+.vote-row input[type=range]{flex:1;accent-color:var(--pink);}
+.vote-val{font-family:var(--font-mono);font-size:16px;color:var(--pink);width:22px;text-align:center;}
+/* live tab — award category rows */
+.award-row{padding:11px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.award-row:last-child{border-bottom:none;}
+.award-left{flex:1;}
+.award-cat{font-size:14px;font-weight:600;}
+.award-winner{font-size:15px;color:var(--teal);font-family:var(--font-display);margin-top:2px;}
+.award-tba{font-size:12px;color:var(--text-muted);margin-top:2px;}
+/* lucky draw / karaoke winners list */
+.winner-pill{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:100px;padding:5px 12px;font-size:13px;margin:4px 4px 4px 0;}
+.winner-pill.gold{border-color:rgba(232,184,75,.4);color:var(--gold);}
+.winner-pill.pink{border-color:rgba(255,77,141,.4);color:var(--pink);}
+/* pair score card */
+.pair-card{background:var(--surface);border:1px solid rgba(255,77,141,.3);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.pair-card .pair-names{font-family:var(--font-display);font-size:18px;color:var(--pink);}
+.pair-card .pair-meta{font-size:12px;color:var(--text-muted);margin-top:2px;}
+/* leaderboard */
+.lb-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.lb-row:last-child{border-bottom:none;}
+.lb-rank{font-family:var(--font-display);font-size:18px;color:var(--text-muted);width:26px;text-align:center;}
+.lb-rank.top{color:var(--gold);}
+.lb-name{flex:1;font-size:14px;}
+.lb-pts{font-family:var(--font-mono);font-size:13px;color:var(--teal);}
+.empty-msg{text-align:center;color:var(--text-muted);font-size:13px;padding:20px 0;}
 </style>
 </head>
 <body>
@@ -130,178 +75,113 @@ body { padding-bottom: 40px; }
     <div class="eyebrow">Staff Registration</div>
   </div>
 
-  <!-- ═══ STEP 1: Registration form ═══ -->
+  <!-- STEP 1: form -->
   <div class="step active" id="step-form">
     <div class="card">
       <h2 style="font-size:18px;margin-bottom:4px;">Welcome 👋</h2>
-      <p class="muted" style="margin:0 0 16px;font-size:14px;">Register once — your pass covers check-in, karaoke, quiz, and the live feed.</p>
+      <p class="muted" style="margin:0 0 14px;font-size:14px;">Register once — your pass covers tonight.</p>
       <label for="staffId">Staff ID</label>
-      <input id="staffId" type="text" autocomplete="off" placeholder="e.g. ST-1042" />
-      <label for="name" style="margin-top:12px;">Full name</label>
-      <input id="name" type="text" autocomplete="off" placeholder="e.g. Aisha Hassan" />
-      <label for="contact" style="margin-top:12px;">Contact number</label>
-      <input id="contact" type="tel" autocomplete="off" placeholder="e.g. 7712345" />
-      <button class="btn btn-gold btn-block" style="margin-top:20px;" id="submitBtn">Check in &amp; get my pass</button>
-      <p class="muted" id="formError" style="font-size:13px;margin-top:10px;min-height:1px;"></p>
+      <input id="staffId" type="text" autocomplete="off" placeholder="e.g. ST-1042"/>
+      <label for="uname" style="margin-top:10px;">Full name</label>
+      <input id="uname" type="text" autocomplete="off" placeholder="e.g. Aisha Hassan"/>
+      <label for="contact" style="margin-top:10px;">Contact</label>
+      <input id="contact" type="tel" autocomplete="off" placeholder="e.g. 7712345"/>
+      <button class="btn btn-gold btn-block" style="margin-top:18px;" id="submitBtn">Check in &amp; get my pass</button>
+      <p class="muted" id="formErr" style="font-size:13px;margin-top:8px;min-height:1px;"></p>
     </div>
   </div>
 
-  <!-- ═══ STEP 2: Pass + live sections ═══ -->
+  <!-- STEP 2: pass + tabs -->
   <div class="step" id="step-pass">
 
-    <!-- Pass card (no QR — self-registration means nothing to scan) -->
+    <!-- Pass card -->
     <div class="pass-card">
       <div class="badge live">CHECKED IN</div>
       <div class="pass-name" id="passName">—</div>
-      <div class="pass-id"   id="passStaffId">—</div>
-      <div class="pass-note">You're all set for tonight. Everything below updates live.</div>
+      <div class="pass-id" id="passId">—</div>
     </div>
 
-    <!-- ═══ EVENT LIVE FEED ═══ -->
-    <div class="section-card" style="padding:14px 14px 6px;">
-      <div class="eyebrow">📡 Event live feed</div>
-      <div id="modeBanner" class="mode-strip">Standby — event starting soon</div>
-
-      <div class="rtabs">
-        <button class="rtab active" data-rtab="r-agenda">Agenda</button>
-        <button class="rtab" data-rtab="r-quiz-tab">Quiz</button>
-        <button class="rtab" data-rtab="r-karaoke-tab">Karaoke</button>
-        <button class="rtab" data-rtab="r-winners">Winners</button>
-      </div>
-
-      <!-- Agenda -->
-      <div id="r-agenda" class="rpanel active">
-        <div id="rAgendaList"><div class="empty-msg">Loading agenda…</div></div>
-      </div>
-
-      <!-- Quiz info tab (leaderboard) -->
-      <div id="r-quiz-tab" class="rpanel">
-        <div id="rQuizTabContent"><div class="empty-msg">Quiz hasn't started yet.</div></div>
-      </div>
-
-      <!-- Karaoke info tab (pair scores) -->
-      <div id="r-karaoke-tab" class="rpanel">
-        <div id="rKaraokeTabContent"><div class="empty-msg">Karaoke night coming up!</div></div>
-      </div>
-
-      <!-- Live announcements -->
-      <div id="r-winners" class="rpanel">
-        <div id="rWinnersList"><div class="empty-msg">No winners announced yet — check back soon.</div></div>
-      </div>
+    <!-- Tabs -->
+    <div class="rtabs">
+      <button class="rtab active" data-rtab="r-agenda">Agenda</button>
+      <button class="rtab" data-rtab="r-quiz">Quiz</button>
+      <button class="rtab" data-rtab="r-karaoke">Karaoke</button>
+      <button class="rtab" data-rtab="r-live">Live</button>
     </div>
 
-    <!-- ═══ QUIZ NIGHT ═══ -->
-    <div class="section-card" id="quizSection" style="margin-top:12px;">
-      <div class="eyebrow" style="margin-bottom:10px;">🧠 Quiz Night</div>
+    <!-- AGENDA -->
+    <div id="r-agenda" class="rpanel active">
+      <div id="agendaContent"><div class="empty-msg">Loading agenda…</div></div>
+    </div>
 
-      <!-- Not joined -->
-      <div id="quizJoinDiv">
-        <p class="muted" style="font-size:14px;margin:0 0 10px;">Fastest correct answers win — no setup needed.</p>
+    <!-- QUIZ -->
+    <div id="r-quiz" class="rpanel">
+      <!-- join (hidden after joining) -->
+      <div class="tab-card" id="quizJoinCard">
+        <div class="eyebrow">🧠 Quiz Night</div>
+        <p class="muted" style="font-size:14px;margin:0 0 10px;">Fastest correct answers win.</p>
         <button class="btn btn-teal btn-block" id="joinQuizBtn">Join the quiz</button>
       </div>
-
-      <!-- Joined states -->
-      <div id="quizJoinedDiv" style="display:none;">
-        <!-- idle / lobby -->
-        <div id="qState-idle"><p class="muted" style="font-size:14px;margin:0;">🧠 You're in! This will spring to life when the quiz starts.</p></div>
-        <!-- running: question -->
-        <div id="qState-running" style="display:none;">
-          <div class="quiz-timer-row">
-            <div class="quiz-batch" id="qBatchLabel">QUESTION 1</div>
-            <div class="quiz-timer" id="qTimer">—</div>
+      <!-- quiz experience (hidden until joined) -->
+      <div id="quizLiveCard" style="display:none;">
+        <div class="tab-card" id="quizStateCard">
+          <div class="empty-msg">Waiting for quiz to start…</div>
+        </div>
+        <div class="tab-card" style="margin-top:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;color:var(--text-muted);">My score</span>
+            <span class="mono" id="quizMyScore" style="color:var(--teal);font-size:14px;">0 pts</span>
           </div>
-          <p style="font-size:17px;font-weight:600;margin:0 0 14px;line-height:1.4;" id="qText">—</p>
-          <div id="qOptions"></div>
-          <p class="muted" id="qLockedMsg" style="font-size:13px;text-align:center;display:none;">Answer locked in — waiting for everyone ⏳</p>
-        </div>
-        <!-- question ended -->
-        <div id="qState-ended" style="display:none;">
-          <div style="text-align:center;padding:10px 0;">
-            <div style="font-size:28px;" id="qResultEmoji">—</div>
-            <p style="margin:4px 0;" id="qResultMsg"></p>
-            <p class="muted" style="font-size:12px;" id="qResultDetail"></p>
-          </div>
-        </div>
-        <!-- finished -->
-        <div id="qState-finished" style="display:none;">
-          <p style="font-weight:600;margin:0 0 10px;">Final scores</p>
-          <div id="qFinalLeaderboard"></div>
-        </div>
-        <!-- my score -->
-        <div id="qMyScore" style="display:none;text-align:right;margin-top:8px;">
-          <span class="mono" style="font-size:13px;color:var(--teal);" id="qMyScoreVal">0 pts</span>
         </div>
       </div>
     </div>
 
-    <!-- ═══ KARAOKE NIGHT ═══ -->
-    <div class="section-card" id="karaokeSection" style="margin-top:12px;">
-      <div class="eyebrow" style="margin-bottom:10px;">🎤 Karaoke Night</div>
-
-      <!-- Not joined -->
-      <div id="karaokeJoinDiv">
-        <p class="muted" style="font-size:14px;margin:0 0 8px;">Join the lineup — paired one guy with one girl, assigned a song.</p>
+    <!-- KARAOKE -->
+    <div id="r-karaoke" class="rpanel">
+      <!-- join -->
+      <div class="tab-card" id="karaokeJoinCard">
+        <div class="eyebrow">🎤 Karaoke Night</div>
+        <p class="muted" style="font-size:14px;margin:0 0 6px;">Join the lineup — one guy + one girl, assigned a song.</p>
         <div class="gender-pick">
-          <button id="pickMale"   class="btn">🕺 Male</button>
+          <button id="pickMale" class="btn">🕺 Male</button>
           <button id="pickFemale" class="btn">💃 Female</button>
         </div>
-        <button class="btn btn-pink btn-block" id="joinKaraokeBtn" style="margin-top:12px;" disabled>Select gender to join</button>
+        <button class="btn btn-pink btn-block" id="joinKaraokeBtn" style="margin-top:10px;" disabled>Select gender to join</button>
       </div>
-
-      <!-- Joined states -->
-      <div id="karaokeJoinedDiv" style="display:none;">
-        <div class="joined-tag" id="karaokeGenderTag">Joined</div>
-
-        <!-- Waiting -->
-        <div id="kState-waiting" style="margin-top:10px;">
-          <p class="muted" style="font-size:14px;margin:0;">Watch the big screen for your pairing &amp; song 🎶</p>
+      <!-- karaoke status (hidden until joined) -->
+      <div id="karaokeStatusCard" style="display:none;">
+        <div class="tab-card" id="karaokeStateCard">
+          <div class="empty-msg">Loading…</div>
         </div>
-
-        <!-- On stage (performer) -->
-        <div id="kState-performing" style="display:none;text-align:center;padding:10px 0;">
-          <div style="font-size:40px;">🎤</div>
-          <p style="font-weight:600;margin:8px 0 2px;" id="kOnStagePair">—</p>
-          <p class="muted" style="font-size:13px;" id="kOnStageSong">—</p>
-          <div class="mode-strip karaoke" style="margin-top:12px;">Give it your best!</div>
-        </div>
-
-        <!-- Audience voting -->
-        <div id="kState-voting" style="display:none;">
-          <p style="font-weight:600;margin:0 0 4px;" id="kVotePair">—</p>
-          <p class="muted" style="font-size:12px;margin:0 0 14px;" id="kVoteSong">—</p>
-
-          <div class="vote-label">Performance <span style="font-size:11px;">(stage presence)</span></div>
-          <div class="vote-row">
-            <input type="range" id="votePerf" min="1" max="10" value="7" />
-            <div class="vote-val" id="votePerfVal">7</div>
-          </div>
-
-          <div class="vote-label">Singing <span style="font-size:11px;">(vocal quality)</span></div>
-          <div class="vote-row">
-            <input type="range" id="voteSing" min="1" max="10" value="7" />
-            <div class="vote-val" id="voteSingVal">7</div>
-          </div>
-
-          <button class="btn btn-pink btn-block" id="submitVoteBtn" style="margin-top:16px;">Submit vote ⭐</button>
-        </div>
-
-        <!-- Voted -->
-        <div id="kState-voted" style="display:none;text-align:center;padding:10px 0;">
-          <div style="font-size:32px;">⭐</div>
-          <p style="font-weight:600;margin:8px 0 2px;">Vote submitted!</p>
-          <p class="muted" style="font-size:13px;">Waiting for the next pair…</p>
-        </div>
-
-        <!-- Results shown -->
-        <div id="kState-results" style="display:none;margin-top:8px;">
-          <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">Last pair result</p>
-          <div id="kResultDetails"></div>
-        </div>
+      </div>
+      <!-- songs & pairs (always shown in karaoke tab) -->
+      <div class="tab-card">
+        <div class="eyebrow" style="margin-bottom:8px;">Songs &amp; Pairs</div>
+        <div id="karaokeSongsPairsContent"><div class="empty-msg">No pairs yet.</div></div>
       </div>
     </div>
 
-  </div><!-- /step-pass -->
-</div><!-- /stage -->
+    <!-- LIVE -->
+    <div id="r-live" class="rpanel">
+      <!-- Award categories -->
+      <div class="tab-card">
+        <div class="eyebrow" style="margin-bottom:8px;">🏆 Staff Awards</div>
+        <div id="liveAwardsContent"><div class="empty-msg">Awards ceremony coming up.</div></div>
+      </div>
+      <!-- Lucky draw -->
+      <div class="tab-card">
+        <div class="eyebrow" style="margin-bottom:8px;">🎰 Lucky Draw</div>
+        <div id="liveLuckyDrawContent"><div class="empty-msg">No draws yet.</div></div>
+      </div>
+      <!-- Karaoke winner -->
+      <div class="tab-card">
+        <div class="eyebrow" style="margin-bottom:8px;">🎤 Karaoke Night</div>
+        <div id="liveKaraokeContent"><div class="empty-msg">Winner to be announced.</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -315,737 +195,447 @@ import { getAuth, signInAnonymously, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 document.getElementById("eventName").textContent = window.EVENT_NAME || "Event Check-In";
+const app = initializeApp(window.FIREBASE_CONFIG);
+const db  = getFirestore(app);
+const auth= getAuth(app);
 
-const app  = initializeApp(window.FIREBASE_CONFIG);
-const db   = getFirestore(app);
-const auth = getAuth(app);
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400);}
+function showStep(id){document.querySelectorAll(".step").forEach(s=>s.classList.remove("active"));document.getElementById(id).classList.add("active");}
+function esc(s){return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function genId(){return "att_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
 
-function toast(msg) {
-  const t = document.getElementById("toast");
-  t.textContent = msg; t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2400);
-}
-function showStep(id) {
-  document.querySelectorAll(".step").forEach(s => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-}
-function genId() {
-  return "att_" + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
-}
-function esc(s) { return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-async function ensureAuth() {
-  return new Promise((resolve, reject) => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      unsub();
-      if (user) { resolve(user); return; }
-      try { resolve((await signInAnonymously(auth)).user); }
-      catch(e) { reject(e); toast("Connection error. Check your internet."); }
+async function ensureAuth(){
+  return new Promise((res,rej)=>{
+    const u=onAuthStateChanged(auth,async user=>{
+      u();
+      if(user){res(user);return;}
+      try{res((await signInAnonymously(auth)).user);}catch(e){rej(e);}
     });
   });
 }
 
-// ── Tabs ──
-document.querySelectorAll(".rtab").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".rtab").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".rpanel").forEach(p => p.classList.remove("active"));
+// Tabs
+document.querySelectorAll(".rtab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".rtab").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".rpanel").forEach(p=>p.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById(btn.dataset.rtab).classList.add("active");
   });
 });
 
-// ── Pass ──
-async function loadPass(attendeeId, data) {
-  document.getElementById("passName").textContent    = data.name || "—";
-  document.getElementById("passStaffId").textContent = data.staffId || "—";
+let attendeeId = localStorage.getItem("attendeeId");
+let myName = "";
+
+// ── Registration ──
+document.getElementById("submitBtn").addEventListener("click", async()=>{
+  const staffId=document.getElementById("staffId").value.trim();
+  const name=document.getElementById("uname").value.trim();
+  const contact=document.getElementById("contact").value.trim();
+  const err=document.getElementById("formErr");
+  if(!staffId||!name||!contact){err.textContent="Fill in all fields.";return;}
+  err.textContent="";
+  const btn=document.getElementById("submitBtn");
+  btn.disabled=true;btn.textContent="Checking in…";
+  try{
+    await ensureAuth();
+    const existing=await getDocs(query(collection(db,"attendees"),where("staffId","==",staffId),limit(1)));
+    let aid;
+    if(!existing.empty){
+      aid=existing.docs[0].id;
+      await setDoc(doc(db,"attendees",aid),{name,contact},{merge:true});
+      toast("Welcome back!");
+    }else{
+      aid=genId();
+      await setDoc(doc(db,"attendees",aid),{attendeeId:aid,staffId,name,contact,checkedIn:true,checkedInAt:serverTimestamp(),registeredAt:serverTimestamp(),source:"self"});
+      toast("Checked in! 🎉");
+    }
+    localStorage.setItem("attendeeId",aid);
+    attendeeId=aid; myName=name;
+    await loadPass(aid,{staffId,name});
+  }catch(e){
+    err.textContent="Something went wrong — check your connection.";
+    btn.disabled=false;btn.textContent="Check in & get my pass";
+    console.error(e);
+  }
+});
+
+async function loadPass(aid,data){
+  document.getElementById("passName").textContent=data.name||"—";
+  document.getElementById("passId").textContent=data.staffId||"—";
   showStep("step-pass");
-  // Restore karaoke state
-  const kSnap = await getDoc(doc(db,"karaoke_participants",attendeeId));
-  if (kSnap.exists()) {
-    document.getElementById("karaokeJoinDiv").style.display   = "none";
-    document.getElementById("karaokeJoinedDiv").style.display = "block";
-    const g = kSnap.data().gender;
-    document.getElementById("karaokeGenderTag").textContent = g==="male" ? "✓ Registered as Male" : "✓ Registered as Female";
-  }
   // Restore quiz state
-  const qSnap = await getDoc(doc(db,"quiz_participants",attendeeId));
-  if (qSnap.exists()) {
-    document.getElementById("quizJoinDiv").style.display    = "none";
-    document.getElementById("quizJoinedDiv").style.display  = "block";
-    document.getElementById("qMyScore").style.display       = "block";
-    document.getElementById("qMyScoreVal").textContent      = (qSnap.data().totalScore||0) + " pts";
+  const qp=await getDoc(doc(db,"quiz_participants",aid));
+  if(qp.exists()){
+    document.getElementById("quizJoinCard").style.display="none";
+    document.getElementById("quizLiveCard").style.display="block";
+    document.getElementById("quizMyScore").textContent=(qp.data().totalScore||0)+" pts";
   }
-  startLiveFeed(attendeeId, data.name || "");
+  // Restore karaoke state
+  const kp=await getDoc(doc(db,"karaoke_participants",aid));
+  if(kp.exists()){
+    document.getElementById("karaokeJoinCard").style.display="none";
+    document.getElementById("karaokeStatusCard").style.display="block";
+  }
+  startLiveListeners(aid,data.name||"");
 }
 
 // ── Gender pick ──
-let selectedGender = null;
-document.getElementById("pickMale").addEventListener("click", () => {
-  selectedGender = "male";
-  document.getElementById("pickMale").classList.add("selected","male");
-  document.getElementById("pickFemale").classList.remove("selected","female");
-  const b = document.getElementById("joinKaraokeBtn");
-  b.disabled = false; b.textContent = "Join as Male 🕺";
+let selGender=null;
+document.getElementById("pickMale").addEventListener("click",()=>{
+  selGender="male";
+  document.getElementById("pickMale").classList.add("sel","male");
+  document.getElementById("pickFemale").classList.remove("sel","female");
+  const b=document.getElementById("joinKaraokeBtn");b.disabled=false;b.textContent="Join as Male 🕺";
 });
-document.getElementById("pickFemale").addEventListener("click", () => {
-  selectedGender = "female";
-  document.getElementById("pickFemale").classList.add("selected","female");
-  document.getElementById("pickMale").classList.remove("selected","male");
-  const b = document.getElementById("joinKaraokeBtn");
-  b.disabled = false; b.textContent = "Join as Female 💃";
+document.getElementById("pickFemale").addEventListener("click",()=>{
+  selGender="female";
+  document.getElementById("pickFemale").classList.add("sel","female");
+  document.getElementById("pickMale").classList.remove("sel","male");
+  const b=document.getElementById("joinKaraokeBtn");b.disabled=false;b.textContent="Join as Female 💃";
 });
-
-document.getElementById("joinKaraokeBtn").addEventListener("click", async () => {
-  if (!selectedGender || !currentAttendeeId) return;
-  try {
-    await setDoc(doc(db,"karaoke_participants",currentAttendeeId), {
-      attendeeId:currentAttendeeId, name:currentName, gender:selectedGender,
-      paired:false, pairId:null, joinedAt:serverTimestamp()
-    });
-    document.getElementById("karaokeJoinDiv").style.display   = "none";
-    document.getElementById("karaokeJoinedDiv").style.display = "block";
-    document.getElementById("karaokeGenderTag").textContent   = selectedGender==="male" ? "✓ Registered as Male" : "✓ Registered as Female";
-    toast("You're on the karaoke lineup 🎤");
-  } catch(e) { toast("Couldn't join karaoke — try again."); }
+document.getElementById("joinKaraokeBtn").addEventListener("click",async()=>{
+  if(!selGender||!attendeeId)return;
+  try{
+    await setDoc(doc(db,"karaoke_participants",attendeeId),{attendeeId,name:myName,gender:selGender,paired:false,pairId:null,joinedAt:serverTimestamp()});
+    document.getElementById("karaokeJoinCard").style.display="none";
+    document.getElementById("karaokeStatusCard").style.display="block";
+    toast("You're in the karaoke lineup 🎤");
+  }catch(e){toast("Couldn't join — try again.");}
 });
-
-document.getElementById("joinQuizBtn").addEventListener("click", async () => {
-  if (!currentAttendeeId) return;
-  try {
-    await setDoc(doc(db,"quiz_participants",currentAttendeeId), {
-      attendeeId:currentAttendeeId, name:currentName, totalScore:0, joinedAt:serverTimestamp()
-    });
-    document.getElementById("quizJoinDiv").style.display    = "none";
-    document.getElementById("quizJoinedDiv").style.display  = "block";
-    document.getElementById("qMyScore").style.display       = "block";
+document.getElementById("joinQuizBtn").addEventListener("click",async()=>{
+  if(!attendeeId)return;
+  try{
+    await setDoc(doc(db,"quiz_participants",attendeeId),{attendeeId,name:myName,totalScore:0,joinedAt:serverTimestamp()});
+    document.getElementById("quizJoinCard").style.display="none";
+    document.getElementById("quizLiveCard").style.display="block";
     toast("You're in the quiz 🧠");
-  } catch(e) { toast("Couldn't join quiz — try again."); }
+  }catch(e){toast("Couldn't join — try again.");}
 });
 
-// ── Registration ──
-let currentAttendeeId = localStorage.getItem("attendeeId");
-let currentName = "";
+// ════════════════════════════════════════
+//  LIVE LISTENERS
+// ════════════════════════════════════════
+function startLiveListeners(aid, name){
 
-document.getElementById("submitBtn").addEventListener("click", async () => {
-  const staffId = document.getElementById("staffId").value.trim();
-  const name    = document.getElementById("name").value.trim();
-  const contact = document.getElementById("contact").value.trim();
-  const errEl   = document.getElementById("formError");
-  if (!staffId||!name||!contact) { errEl.textContent="Please fill in all three fields."; return; }
-  errEl.textContent = "";
-  const btn = document.getElementById("submitBtn");
-  btn.disabled = true; btn.textContent = "Checking in…";
-  try {
-    await ensureAuth();
-    const existingSnap = await getDocs(query(collection(db,"attendees"),where("staffId","==",staffId),limit(1)));
-    let attendeeId;
-    if (!existingSnap.empty) {
-      attendeeId = existingSnap.docs[0].id;
-      await setDoc(doc(db,"attendees",attendeeId),{name,contact},{merge:true});
-      toast("Welcome back — resuming your pass.");
-    } else {
-      attendeeId = genId();
-      await setDoc(doc(db,"attendees",attendeeId),{
-        attendeeId, staffId, name, contact,
-        checkedIn:true, checkedInAt:serverTimestamp(), registeredAt:serverTimestamp(), source:"self"
+  // ── AGENDA ──
+  onSnapshot(doc(db,"state","agenda"),snap=>{
+    const el=document.getElementById("agendaContent");
+    const items=snap.exists()?(snap.data().items||[]):[];
+    if(!items.length){el.innerHTML='<div class="empty-msg">No agenda set yet.</div>';return;}
+    el.innerHTML=items.map(i=>`
+      <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:18px;flex:0 0 24px;">${i.icon||"📌"}</span>
+        <span class="mono muted" style="font-size:11px;flex:0 0 56px;padding-top:3px;">${esc(i.time||"")}</span>
+        <div><div style="font-size:14px;font-weight:600;">${esc(i.title)}</div>${i.desc?`<div style="font-size:12px;color:var(--text-muted);">${esc(i.desc)}</div>`:""}</div>
+      </div>`).join("").replace(/border-bottom[^;]+;(?=\s*<\/div>\s*$)/,"");
+  },()=>{});
+
+  // ── QUIZ TAB ──
+  let answeredQId=null, myAnswerIdx=null, qTimerInt=null;
+  function stopQTimer(){if(qTimerInt){clearInterval(qTimerInt);qTimerInt=null;}}
+  function startQTimer(startMs,durMs){
+    stopQTimer();
+    const el=document.getElementById("q-timer");
+    if(!el)return;
+    const tick=()=>{const rem=Math.max(0,durMs-(Date.now()-startMs));if(el)el.textContent=Math.ceil(rem/1000)+"s";if(rem<=0)stopQTimer();};
+    tick(); qTimerInt=setInterval(tick,200);
+  }
+  function setQState(html){const el=document.getElementById("quizStateCard");if(el)el.innerHTML=html;}
+
+  onSnapshot(doc(db,"quiz_participants",aid),snap=>{
+    if(snap.exists()) document.getElementById("quizMyScore").textContent=(snap.data().totalScore||0)+" pts";
+  },()=>{});
+
+  onSnapshot(doc(db,"state","quiz"),async snap=>{
+    if(!snap.exists()){setQState('<div class="empty-msg">Waiting for quiz to start…</div>');return;}
+    const s=snap.data();
+    if(s.status==="idle"||s.status==="lobby"){
+      stopQTimer();
+      setQState('<div class="empty-msg">Quiz coming up — stay tuned!</div>');
+      return;
+    }
+    if(s.status==="running"&&s.currentQuestionId){
+      const durMs=(s.durationSec||15)*1000;
+      try{
+        const qSnap=await getDoc(doc(db,"quiz_questions",s.currentQuestionId));
+        if(!qSnap.exists())return;
+        const q=qSnap.data();
+        const alreadyAns=answeredQId===s.currentQuestionId;
+        if(!alreadyAns){myAnswerIdx=null;}
+        startQTimer(s.questionStartedAtMs||Date.now(),durMs);
+        setQState(`
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span class="mono muted" style="font-size:11px;">Q${s.batchNumber||1}</span>
+            <span class="q-timer" id="q-timer">—</span>
+          </div>
+          <p style="font-size:16px;font-weight:600;margin:0 0 12px;line-height:1.4;">${esc(q.text)}</p>
+          <div id="q-opts"></div>
+          <p class="muted" id="q-locked" style="font-size:12px;text-align:center;display:none;">Answer locked in ⏳</p>`);
+        startQTimer(s.questionStartedAtMs||Date.now(),durMs);
+        const optsEl=document.getElementById("q-opts");
+        (q.options||[]).forEach((opt,i)=>{
+          const b=document.createElement("button");
+          b.className="quiz-opt"+(alreadyAns&&i===myAnswerIdx?" sel":"");
+          b.textContent=opt; b.disabled=alreadyAns;
+          if(!alreadyAns) b.addEventListener("click",()=>submitAns(s.currentQuestionId,i,s.questionStartedAtMs||Date.now()));
+          optsEl.appendChild(b);
+        });
+        if(alreadyAns){const l=document.getElementById("q-locked");if(l)l.style.display="block";}
+      }catch(e){}
+      return;
+    }
+    if(s.status==="question_ended"){
+      stopQTimer();
+      let emoji="⏱",msg="Time's up",detail="";
+      if(myAnswerIdx!==null&&answeredQId===s.currentQuestionId){
+        try{
+          const qSnap=await getDoc(doc(db,"quiz_questions",s.currentQuestionId));
+          if(qSnap.exists()){
+            const correct=Number(myAnswerIdx)===Number(qSnap.data().correctIndex);
+            emoji=correct?"✅":"❌"; msg=correct?"Correct!":"Not quite";
+          }
+        }catch(e){}
+      }
+      if(s.lastResult?.fastestName) detail=`⚡ Fastest: ${esc(s.lastResult.fastestName)}`;
+      setQState(`<div style="text-align:center;padding:14px 0;">
+        <div style="font-size:36px;">${emoji}</div>
+        <p style="font-weight:600;margin:6px 0 2px;">${msg}</p>
+        <p class="muted" style="font-size:12px;">${detail}</p>
+      </div>`);
+      return;
+    }
+    if(s.status==="finished"){
+      stopQTimer();
+      try{
+        const snap=await getDocs(query(collection(db,"quiz_participants"),orderBy("totalScore","desc"),limit(15)));
+        const rows=[...snap.docs].map((d,i)=>{
+          const p=d.data();const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"#"+(i+1);
+          return `<div class="lb-row"><div class="lb-rank ${i<3?"top":""}">${medal}</div><div class="lb-name">${esc(p.name||"—")}${d.id===aid?" (you)":""}</div><div class="lb-pts">${p.totalScore||0} pts</div></div>`;
+        }).join("");
+        setQState(`<div class="eyebrow" style="margin-bottom:10px;">Quiz finished! 🏁</div>${rows||"<div class='empty-msg'>No scores.</div>"}`);
+      }catch(e){setQState('<div class="empty-msg">Quiz finished!</div>');}
+    }
+  },()=>{});
+
+  async function submitAns(questionId,idx,startMs){
+    if(answeredQId===questionId)return;
+    answeredQId=questionId; myAnswerIdx=idx;
+    document.querySelectorAll(".quiz-opt").forEach((b,i)=>{b.disabled=true;if(i===idx)b.classList.add("sel");});
+    const locked=document.getElementById("q-locked");if(locked)locked.style.display="block";
+    try{
+      await setDoc(doc(db,"quiz_answers",questionId+"_"+aid),{
+        questionId,attendeeId:aid,name,selectedIndex:Number(idx),
+        answeredAtClientMs:Date.now(),clientTimeTakenMs:Date.now()-startMs,
+        answeredAtServer:serverTimestamp()
       });
-      toast("Checked in — welcome! 🎉");
+    }catch(e){console.error(e);}
+  }
+
+  // ── KARAOKE TAB ──
+  let kVotePairId=null, kVotedPairId=null;
+
+  async function renderKaraokeSongsPairs(){
+    const el=document.getElementById("karaokeSongsPairsContent");
+    try{
+      const [pairsSnap]=await Promise.all([getDocs(collection(db,"karaoke_pairs"))]);
+      const pairs=[];pairsSnap.forEach(d=>pairs.push({id:d.id,...d.data()}));
+      if(!pairs.length){el.innerHTML='<div class="empty-msg">No pairs yet.</div>';return;}
+      el.innerHTML=pairs.map(p=>{
+        const statusColor=p.status==="done"?"var(--teal)":p.status==="performing"?"var(--pink)":"var(--text-muted)";
+        return `<div class="pair-card">
+          <div class="pair-names">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
+          <div class="pair-meta">${esc(p.song||"")} <span style="color:${statusColor};margin-left:6px;">${p.status==="done"?"Score: "+(p.totalScore||0).toFixed(1):p.status}</span></div>
+        </div>`;
+      }).join("");
+    }catch(e){el.innerHTML='<div class="empty-msg">—</div>';}
+  }
+  renderKaraokeSongsPairs();
+
+  onSnapshot(doc(db,"state","karaoke"),async snap=>{
+    renderKaraokeSongsPairs();
+    if(!snap.exists()){return;}
+    const s=snap.data();
+    const el=document.getElementById("karaokeStateCard");
+    if(!el)return;
+    if(s.phase==="lobby"||!s.currentPairId){
+      el.innerHTML='<div class="empty-msg">Watch the big screen for your pair & song 🎶</div>';
+      return;
     }
-    localStorage.setItem("attendeeId", attendeeId);
-    currentAttendeeId = attendeeId;
-    currentName = name;
-    await loadPass(attendeeId,{staffId,name});
-  } catch(e) {
-    console.error(e);
-    errEl.textContent = "Something went wrong — check your connection.";
-    btn.disabled = false; btn.textContent = "Check in & get my pass";
-  }
-});
-
-// ════════════════════════════════════════
-//  LIVE FEED + QUIZ + KARAOKE LISTENERS
-// ════════════════════════════════════════
-let liveFeedStarted = false;
-
-function startLiveFeed(attendeeId, myName) {
-  if (liveFeedStarted) return;
-  liveFeedStarted = true;
-
-  // ── Mode banner ──
-  const modeMap = {
-    idle:       {text:"Standby — event starting soon", cls:""},
-    lucky_draw: {text:"🎰  Lucky Draw is live",        cls:"draw"},
-    karaoke:    {text:"🎤  Karaoke night is on",        cls:"karaoke"},
-    quiz:       {text:"🧠  Quiz night",                 cls:"quiz"},
-    awards:     {text:"🏆  Staff awards ceremony",      cls:"awards"},
-  };
-  onSnapshot(doc(db,"state","display"), snap => {
-    const m = modeMap[snap.exists()?snap.data().mode:"idle"] || modeMap.idle;
-    const b = document.getElementById("modeBanner");
-    b.textContent = m.text;
-    b.className = "mode-strip " + m.cls;
-  }, ()=>{});
-
-  // ── Agenda tab ──
-  onSnapshot(doc(db,"state","agenda"), snap => {
-    const el = document.getElementById("rAgendaList");
-    const items = snap.exists() ? (snap.data().items||[]) : [];
-    if (!items.length) {
-      el.innerHTML = '<div class="empty-msg">No agenda set yet.</div>'; return;
+    if(s.phase==="performing"&&s.currentPairId){
+      try{
+        const pSnap=await getDoc(doc(db,"karaoke_pairs",s.currentPairId));
+        if(!pSnap.exists())return;
+        const p=pSnap.data();
+        const isPerformer=aid&&(p.maleId===aid||p.femaleId===aid);
+        if(isPerformer){
+          el.innerHTML=`<div style="text-align:center;padding:10px 0;">
+            <div style="font-size:36px;">🎤</div>
+            <p style="font-weight:600;margin:8px 0 2px;">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</p>
+            <p class="muted" style="font-size:12px;">${esc(p.song||"")} · You're on stage! Give it your best!</p>
+          </div>`;
+          return;
+        }
+        if(kVotePairId!==s.currentPairId){kVotePairId=s.currentPairId;}
+        // Check if already voted
+        const vSnap=await getDoc(doc(db,"karaoke_votes",s.currentPairId+"_"+aid));
+        if(vSnap.exists()||kVotedPairId===s.currentPairId){
+          el.innerHTML=`<div style="text-align:center;padding:10px 0;">
+            <div style="font-size:28px;">⭐</div>
+            <p style="font-weight:600;margin:6px 0 2px;">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</p>
+            <p class="muted" style="font-size:12px;">Vote submitted! Waiting for scores…</p>
+          </div>`;
+          return;
+        }
+        el.innerHTML=`<div>
+          <p style="font-weight:600;margin:0 0 4px;">${esc(p.maleName)} &amp; ${esc(p.femaleName)} <span class="muted" style="font-size:12px;font-weight:normal;">${esc(p.song||"")}</span></p>
+          <div class="muted" style="font-size:12px;margin:10px 0 3px;">Performance</div>
+          <div class="vote-row"><input type="range" id="kv-perf" min="1" max="10" value="7"/><div class="vote-val" id="kv-perf-v">7</div></div>
+          <div class="muted" style="font-size:12px;margin:10px 0 3px;">Singing</div>
+          <div class="vote-row"><input type="range" id="kv-sing" min="1" max="10" value="7"/><div class="vote-val" id="kv-sing-v">7</div></div>
+          <button class="btn btn-pink btn-block" id="kv-submit" style="margin-top:12px;">Submit vote ⭐</button>
+        </div>`;
+        ["kv-perf","kv-sing"].forEach(id=>{
+          const sl=document.getElementById(id);
+          const vl=document.getElementById(id+"-v");
+          if(sl&&vl)sl.addEventListener("input",()=>{vl.textContent=sl.value;});
+        });
+        document.getElementById("kv-submit")?.addEventListener("click",async()=>{
+          if(!aid||!kVotePairId)return;
+          const b=document.getElementById("kv-submit");
+          b.disabled=true;b.textContent="Submitting…";
+          const perf=Number(document.getElementById("kv-perf")?.value||7);
+          const sing=Number(document.getElementById("kv-sing")?.value||7);
+          try{
+            await setDoc(doc(db,"karaoke_votes",kVotePairId+"_"+aid),{pairId:kVotePairId,voterId:aid,performance:perf,singing:sing,votedAt:serverTimestamp()});
+            kVotedPairId=kVotePairId;
+            b.textContent="✓ Voted!";
+            toast("Vote submitted! ⭐");
+          }catch(e){b.disabled=false;b.textContent="Submit vote ⭐";toast("Error — try again.");}
+        });
+      }catch(e){}
     }
-    el.innerHTML = items.map(item => `
-      <div class="ann-card plain">
-        <div class="ann-label">${esc(item.time||"")}</div>
-        <div class="ann-title" style="font-size:17px;">${item.icon||""} ${esc(item.title)}</div>
-        ${item.desc ? `<div class="ann-sub">${esc(item.desc)}</div>` : ""}
-      </div>`).join("");
-  }, ()=>{});
-
-  // ── Live announcements tab ──
-  const announcements = [];
-  const announcedIds = new Set();
-  function addAnn(id, type, label, title, sub) {
-    if (announcedIds.has(id)) return;
-    announcedIds.add(id);
-    announcements.unshift({id,type,label,title,sub,t:new Date()});
-    const el = document.getElementById("rFeedList");
-    el.innerHTML = announcements.map(a => `
-      <div class="ann-card ${a.type}">
-        <div class="ann-label">${a.label} · ${a.t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="ann-title ${a.type}">${a.title}</div>
-        ${a.sub ? `<div class="ann-sub">${a.sub}</div>` : ""}
-      </div>`).join("");
-    if (!el.innerHTML.includes("empty")) return;
-  }
-
-  // ══ WINNERS TAB — all officially revealed winners ══
-  const winnerIds = new Set();
-  const allWinners = [];
-
-  function addWinner(id, type, icon, title, name, sub) {
-    if (winnerIds.has(id)) return;
-    winnerIds.add(id);
-    allWinners.unshift({ id, type, icon, title, name, sub, t: new Date() });
-    renderWinnersTab();
-    // Also auto-switch to Winners tab when a new winner is announced
-    document.querySelectorAll(".rtab").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".rpanel").forEach(p => p.classList.remove("active"));
-    document.querySelector('[data-rtab="r-winners"]').classList.add("active");
-    document.getElementById("r-winners").classList.add("active");
-  }
-
-  function renderWinnersTab() {
-    const el = document.getElementById("rWinnersList");
-    if (!allWinners.length) {
-      el.innerHTML = '<div class="empty-msg">No winners announced yet.</div>'; return;
+    if(s.phase==="results"&&s.currentPairId){
+      try{
+        const pSnap=await getDoc(doc(db,"karaoke_pairs",s.currentPairId));
+        if(pSnap.exists()){
+          const p=pSnap.data();
+          el.innerHTML=`<div style="text-align:center;padding:8px 0;">
+            <p class="muted" style="font-size:12px;">Pair result</p>
+            <p style="font-family:var(--font-display);font-size:20px;color:var(--pink);margin:4px 0;">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</p>
+            <p class="muted" style="font-size:13px;">Performance: ${(p.avgPerformance||0).toFixed(1)} · Singing: ${(p.avgSinging||0).toFixed(1)} · Total: ${(p.totalScore||0).toFixed(1)}</p>
+          </div>`;
+        }
+      }catch(e){}
     }
-    el.innerHTML = allWinners.map(w => `
-      <div class="ann-card ${w.type}">
-        <div class="ann-label">${w.icon} ${w.title} · ${w.t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="ann-title ${w.type}">${esc(w.name)}</div>
-        ${w.sub ? `<div class="ann-sub">${esc(w.sub)}</div>` : ""}
-      </div>`).join("");
+    if(s.phase==="final"){
+      el.innerHTML='<div class="empty-msg">Karaoke night complete! 🎤 Check Live tab for winner.</div>';
+    }
+  },()=>{});
+
+  // ── LIVE TAB ──
+  // Award categories
+  const congratulated=new Set();
+  function renderAwardCategories(cats){
+    const el=document.getElementById("liveAwardsContent");
+    if(!cats.length){el.innerHTML='<div class="empty-msg">Awards ceremony coming up.</div>';return;}
+    el.innerHTML="";
+    cats.forEach(cat=>{
+      const winners=(cat.winners&&cat.winners.length)?cat.winners:(cat.presetWinner?[cat.presetWinner]:[]);
+      const revealed=cat.revealed&&winners.length>0;
+      const row=document.createElement("div");
+      row.className="award-row";
+      row.innerHTML=`<div class="award-left">
+        <div class="award-cat">${esc(cat.name)}</div>
+        ${revealed
+          ?`<div class="award-winner">${winners.map(w=>esc(w.name)).join(" & ")}</div>${winners[0]?.dept?`<div class="award-tba" style="color:var(--text-muted);">${esc(winners[0].dept)}</div>`:""}`
+          :`<div class="award-tba">To be announced</div>`}
+      </div>
+      ${revealed?`<button class="btn btn-gold" id="cg-${cat.id}" style="font-size:12px;padding:7px 12px;flex:0 0 auto;"
+        ${congratulated.has(cat.id)?"disabled":""}>
+        ${congratulated.has(cat.id)?"✓ Sent":"🎉 Congrats"}
+      </button>`:""}`;
+      el.appendChild(row);
+      if(revealed){
+        const btn=document.getElementById("cg-"+cat.id);
+        if(btn&&!congratulated.has(cat.id)){
+          btn.addEventListener("click",async()=>{
+            if(!aid){toast("Register first.");return;}
+            congratulated.add(cat.id);
+            btn.disabled=true;btn.textContent="✓ Sent";
+            toast("🎉 Congratulations sent!");
+            try{
+              await setDoc(doc(db,"award_cats",cat.id,"congrats",aid),{
+                fromName:myName,fromId:aid,
+                winnerName:winners.map(w=>w.name).join(" & "),
+                category:cat.name,sentAt:serverTimestamp()
+              });
+            }catch(e){console.error(e);}
+          });
+        }
+      }
+    });
   }
+
+  onSnapshot(collection(db,"award_cats"),snap=>{
+    const cats=[];
+    snap.forEach(d=>cats.push({id:d.id,...d.data()}));
+    cats.sort((a,b)=>(a.order||0)-(b.order||0));
+    renderAwardCategories(cats);
+    // Switch to Live tab when a winner is first revealed
+    snap.docChanges().forEach(ch=>{
+      if((ch.type==="added"||ch.type==="modified")&&ch.doc.data().revealed){
+        const already=document.querySelector('[data-rtab="r-live"]').classList.contains("active");
+        if(!already){
+          document.querySelectorAll(".rtab").forEach(b=>b.classList.remove("active"));
+          document.querySelectorAll(".rpanel").forEach(p=>p.classList.remove("active"));
+          document.querySelector('[data-rtab="r-live"]').classList.add("active");
+          document.getElementById("r-live").classList.add("active");
+        }
+      }
+    });
+  },()=>{});
 
   // Lucky draw winners
-  let lastDrawWinner = null;
-  onSnapshot(doc(db,"state","lucky_draw"), snap => {
-    if (!snap.exists()) return;
-    const s = snap.data();
-    if (s.status==="revealed" && s.winnerName && s.winnerName!==lastDrawWinner) {
-      lastDrawWinner = s.winnerName;
-      addWinner("draw_"+s.winnerName+"_"+(s.startedAtMs||0),
-        "gold","🎰","Lucky Draw Winner", s.winnerName, s.winnerStaffId?"ID: "+s.winnerStaffId:"");
+  const ldWinners=[];
+  onSnapshot(doc(db,"state","lucky_draw"),snap=>{
+    if(!snap.exists())return;
+    const s=snap.data();
+    if(s.status==="revealed"&&s.winnerName){
+      const pill=`<span class="winner-pill gold">🎰 ${esc(s.winnerName)}${s.winnerStaffId?" · "+esc(s.winnerStaffId):""}</span>`;
+      const id="ld_"+s.winnerName+"_"+(s.startedAtMs||0);
+      if(!ldWinners.includes(id)){ldWinners.push(id);
+        const el=document.getElementById("liveLuckyDrawContent");
+        if(el.querySelector(".empty-msg"))el.innerHTML="";
+        el.insertAdjacentHTML("beforeend",pill);
+      }
     }
-  }, ()=>{});
+  },()=>{});
 
-  // Karaoke winner (only when final announced)
-  let karaokeWinnerShown = false;
-  onSnapshot(doc(db,"state","karaoke"), snap => {
-    if (!snap.exists()) return;
-    if (snap.data().phase==="final" && !karaokeWinnerShown) {
-      karaokeWinnerShown = true;
-      getDocs(query(collection(db,"karaoke_pairs"),orderBy("totalScore","desc"),limit(1))).then(pairs => {
-        if (pairs.empty) return;
-        const w = pairs.docs[0].data();
-        addWinner("karaoke_winner","pink","🎤","Karaoke Night Winner",
-          w.maleName+" & "+w.femaleName,"Score: "+(w.totalScore||0).toFixed(1)+" · Song: "+esc(w.song||""));
-      }).catch(()=>{});
-    }
-  }, ()=>{});
-
-  // Quiz winner (only when finished)
-  let quizWinnerShown = false;
-  onSnapshot(doc(db,"state","quiz"), snap => {
-    if (!snap.exists()||snap.data().status!=="finished"||quizWinnerShown) return;
-    quizWinnerShown = true;
-    getDocs(query(collection(db,"quiz_participants"),orderBy("totalScore","desc"),limit(1))).then(s => {
-      if (s.empty) return;
-      const w = s.docs[0].data();
-      addWinner("quiz_winner","teal","🧠","Quiz Night Winner",w.name,"Score: "+(w.totalScore||0)+" pts");
+  // Karaoke final winner
+  onSnapshot(doc(db,"state","karaoke"),snap=>{
+    if(!snap.exists()||snap.data().phase!=="final")return;
+    getDocs(query(collection(db,"karaoke_pairs"),orderBy("totalScore","desc"),limit(1))).then(pairs=>{
+      if(pairs.empty)return;
+      const w=pairs.docs[0].data();
+      const el=document.getElementById("liveKaraokeContent");
+      el.innerHTML=`<div style="font-family:var(--font-display);font-size:18px;color:var(--pink);">${esc(w.maleName)} &amp; ${esc(w.femaleName)}</div>
+        <div class="muted" style="font-size:12px;">${esc(w.song||"")} · Score: ${(w.totalScore||0).toFixed(1)}</div>`;
     }).catch(()=>{});
-  }, ()=>{});
+  },()=>{});
 
-  // Award winners — only show AFTER admin clicks Reveal (when revealed:true is set)
-  const announcedAwards = new Set();
-  const congratulated   = new Set();
-
-  // Watch award_cats collection for changes (revealed:true fires when admin reveals)
-  onSnapshot(collection(db,"award_cats"), snap => {
-    snap.docChanges().forEach(ch => {
-      if (ch.type !== "added" && ch.type !== "modified") return;
-      const cat = ch.doc.data();
-      if (!cat.revealed || announcedAwards.has(ch.doc.id)) return;
-      announcedAwards.add(ch.doc.id);
-      const winners = cat.winners?.length ? cat.winners : (cat.presetWinner?[cat.presetWinner]:[]);
-      if (!winners.length) return;
-      const winnerName = winners.map(w=>w.name).join(" & ");
-      const dept = winners[0]?.dept||"";
-
-      // Add to Winners tab
-      addWinner("award_"+ch.doc.id,"teal","🏆",cat.name, winnerName, dept);
-
-      // Create award card with congrats button
-      addAwardCard(ch.doc.id, cat.name, winnerName, dept);
-    });
-  }, ()=>{});
-
-  function addAwardCard(catId, category, winnerName, dept) {
-    // Don't duplicate — addWinner already switched tab. Award card is secondary.
-    const wl = document.getElementById("rWinnersList");
-    if (!wl) return;
-    const existing = document.getElementById("cbtn-"+catId);
-    if (existing) return; // already added
-    const already = congratulated.has(catId);
-    const card = document.createElement("div");
-    card.className = "ann-card teal";
-    card.innerHTML = `
-      <div class="ann-label" style="display:none;">hidden</div>
-      <button class="btn btn-gold btn-block" id="cbtn-${catId}"
-        style="margin-top:8px;font-size:14px;" ${already?"disabled":""}>
-        ${already ? "✓ Congratulated! 🎉" : `🎉 Congratulate ${esc(winnerName)}!`}
-      </button>
-      <div id="ccount-${catId}" style="font-size:11px;text-align:center;margin-top:4px;color:var(--text-muted);min-height:14px;"></div>`;
-    card.querySelector("div:first-child").style.display = "none";
-    // Append to the FIRST winners card (find it)
-    const firstCard = wl.querySelector(".ann-card.teal");
-    if (firstCard) firstCard.appendChild(card.querySelector("button"));
-    else {
-      // Append a congrats button below the winners list
-      const btnDiv = document.createElement("div");
-      btnDiv.style.padding = "4px 0";
-      btnDiv.innerHTML = `<button class="btn btn-gold btn-block" id="cbtn-${catId}"
-        style="font-size:14px;" ${already?"disabled":""}>
-        ${already ? "✓ Congratulated! 🎉" : `🎉 Congratulate ${esc(winnerName)}!`}
-      </button>
-      <div id="ccount-${catId}" style="font-size:11px;text-align:center;margin-top:4px;color:var(--text-muted);min-height:14px;"></div>`;
-      wl.appendChild(btnDiv);
-    }
-
-    const btn = document.getElementById("cbtn-"+catId);
-    if (btn && !already) {
-      btn.addEventListener("click", async () => {
-        if (!attendeeId) { toast("Register first."); return; }
-        if (congratulated.has(catId)) return;
-        congratulated.add(catId);
-        btn.disabled = true; btn.textContent = "✓ Congratulated! 🎉";
-        btn.style.background = "var(--teal)"; btn.style.color = "#002b26";
-        toast("🎉 Sent!");
-        try {
-          // Write to subcollection (no Firestore index needed)
-          await setDoc(doc(db,"award_cats",catId,"congrats",attendeeId), {
-            fromName: myName, fromId: attendeeId,
-            winnerName, category, sentAt: serverTimestamp()
-          });
-        } catch(e) { console.error(e); }
-      });
-    }
-
-    // Live congrats count using subcollection
-    onSnapshot(collection(db,"award_cats",catId,"congrats"), snap => {
-      const el = document.getElementById("ccount-"+catId);
-      if (el) el.textContent = snap.size > 0
-        ? `🎉 ${snap.size} colleague${snap.size===1?"":"s"} celebrated!` : "";
-    }, ()=>{});
-  }
-
-  // ── Karaoke tab: voting when live + scores ──
-  // ── Karaoke tab: voting when live + scores ──
-  let tabVotePairId = null;
-  let tabVotedPairId = null;
-
-  onSnapshot(doc(db,"state","karaoke"), async snap => {
-    if (!snap.exists()) return;
-    const s = snap.data();
-    const el = document.getElementById("rKaraokeTabContent");
-    if (s.phase==="lobby" || !s.currentPairId) {
-      el.innerHTML = '<div class="empty-msg">Karaoke night coming up!</div>'; return;
-    }
-
-    let pairHtml = "";
-    if (s.phase==="performing" && s.currentPairId) {
-      try {
-        const pSnap = await getDoc(doc(db,"karaoke_pairs",s.currentPairId));
-        if (pSnap.exists()) {
-          const p = pSnap.data();
-          const isPerformer = attendeeId && (p.maleId===attendeeId || p.femaleId===attendeeId);
-          tabVotePairId = s.currentPairId;
-
-          if (isPerformer) {
-            pairHtml = `<div class="ann-card pink" style="padding:12px 14px;margin-bottom:10px;">
-              <div class="ann-label">🎤 ON STAGE NOW</div>
-              <div class="ann-title pink">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
-              <div class="ann-sub">${esc(p.song||"")} · Give it your best!</div>
-            </div>`;
-          } else if (tabVotedPairId === s.currentPairId) {
-            pairHtml = `<div class="ann-card plain" style="padding:12px 14px;margin-bottom:10px;">
-              <div class="ann-label">🎤 NOW PERFORMING</div>
-              <div class="ann-title" style="color:var(--pink);">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
-              <div class="ann-sub" style="color:var(--teal);">✓ Your vote is in!</div>
-            </div>`;
-          } else {
-            // Show voting in the tab
-            pairHtml = `<div class="ann-card pink" style="padding:14px;margin-bottom:10px;">
-              <div class="ann-label">🎤 NOW PERFORMING — Vote!</div>
-              <div class="ann-title pink" style="margin-bottom:10px;">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Performance</div>
-              <div class="vote-row"><input type="range" id="tabVotePerf" min="1" max="10" value="7" style="flex:1;accent-color:var(--pink);"/><div class="vote-val" id="tabVotePerfVal" style="color:var(--pink);">7</div></div>
-              <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px;">Singing</div>
-              <div class="vote-row"><input type="range" id="tabVoteSing" min="1" max="10" value="7" style="flex:1;accent-color:var(--pink);"/><div class="vote-val" id="tabVoteSingVal" style="color:var(--pink);">7</div></div>
-              <button class="btn btn-pink btn-block" id="tabSubmitVote" style="margin-top:12px;">Submit vote ⭐</button>
-            </div>`;
-          }
-        }
-      } catch(e){}
-    }
-
-    // Scores table
-    let scoresHtml = "";
-    try {
-      const pairs = await getDocs(collection(db,"karaoke_pairs"));
-      const done = []; pairs.forEach(d => { if(d.data().status==="done") done.push({id:d.id,...d.data()}); });
-      done.sort((a,b)=>(b.totalScore||0)-(a.totalScore||0));
-      if (done.length) {
-        scoresHtml = done.map((p,i) => `
-          <div class="ann-card plain" style="padding:9px 14px;margin-bottom:8px;">
-            <div class="ann-label">${["🥇","🥈","🥉"][i]||"#"+(i+1)}</div>
-            <div class="ann-title" style="font-size:16px;color:var(--pink);">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
-            <div class="ann-sub">${esc(p.song||"")} · ${(p.totalScore||0).toFixed(1)} pts</div>
-          </div>`).join("");
-      } else if (!pairHtml) {
-        scoresHtml = '<div class="empty-msg">Scores appear after each pair performs.</div>';
-      }
-    } catch(e){}
-
-    el.innerHTML = pairHtml + scoresHtml;
-
-    // Wire up tab voting sliders + button
-    if (pairHtml.includes("tabSubmitVote")) {
-      ["tabVotePerf","tabVoteSing"].forEach(id => {
-        const sl = document.getElementById(id);
-        const vl = document.getElementById(id+"Val");
-        if (sl && vl) sl.addEventListener("input", () => { vl.textContent = sl.value; });
-      });
-      const submitBtn = document.getElementById("tabSubmitVote");
-      if (submitBtn) {
-        submitBtn.addEventListener("click", async () => {
-          if (!attendeeId || !tabVotePairId) return;
-          submitBtn.disabled = true; submitBtn.textContent = "Submitting…";
-          const perf = Number(document.getElementById("tabVotePerf")?.value || 7);
-          const sing = Number(document.getElementById("tabVoteSing")?.value || 7);
-          try {
-            await setDoc(doc(db,"karaoke_votes",tabVotePairId+"_"+attendeeId), {
-              pairId:tabVotePairId, voterId:attendeeId,
-              performance:perf, singing:sing, votedAt:serverTimestamp()
-            });
-            tabVotedPairId = tabVotePairId;
-            toast("Vote submitted! ⭐");
-            submitBtn.textContent = "✓ Vote in!";
-          } catch(e) { submitBtn.disabled=false; submitBtn.textContent="Submit vote ⭐"; toast("Error — try again"); }
-        });
-      }
-    }
-  }, ()=>{});
-
-  // ── Quiz tab (leaderboard) + Quiz Night section ──
-  let answeredQId = null;
-  let myAnswerIdx = null;
-  let qTimerInterval = null;
-
-  function showQState(state) {
-    ["idle","running","ended","finished"].forEach(s =>
-      document.getElementById("qState-"+s).style.display = s===state?"block":"none"
-    );
-  }
-
-  function stopQTimer() { if(qTimerInterval){clearInterval(qTimerInterval);qTimerInterval=null;} }
-
-  function startQTimer(startedAtMs, durationMs) {
-    stopQTimer();
-    const el = document.getElementById("qTimer");
-    const tick = () => {
-      const rem = Math.max(0, durationMs - (Date.now()-startedAtMs));
-      el.textContent = Math.ceil(rem/1000)+"s";
-      if (rem<=0) stopQTimer();
-    };
-    tick();
-    qTimerInterval = setInterval(tick, 200);
-  }
-
-  async function updateQuizLeaderboard() {
-    const el = document.getElementById("rQuizTabContent");
-    try {
-      const snap = await getDocs(query(collection(db,"quiz_participants"),orderBy("totalScore","desc"),limit(15)));
-      if (snap.empty) { el.innerHTML='<div class="empty-msg">No scores yet.</div>'; return; }
-      el.innerHTML = [...snap.docs].map((d,i) => {
-        const p = d.data(); const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1);
-        return `<div class="lb-row"><div class="lb-rank ${i<3?'top':''}">${medal}</div><div class="lb-name">${esc(p.name||"—")}${d.id===attendeeId?" (you)":""}</div><div class="lb-pts">${p.totalScore||0} pts</div></div>`;
-      }).join("");
-    } catch(e){}
-  }
-
-  const announcedQs = new Set();
-  onSnapshot(doc(db,"state","quiz"), async snap => {
-    if (!snap.exists()) { showQState("idle"); return; }
-    const s = snap.data();
-
-    // Update my score display
-    if (attendeeId) {
-      getDoc(doc(db,"quiz_participants",attendeeId)).then(d => {
-        if (d.exists()) {
-          document.getElementById("qMyScoreVal").textContent = (d.data().totalScore||0)+" pts";
-          document.getElementById("qMyScore").style.display = "block";
-        }
-      }).catch(()=>{});
-    }
-
-    if (s.status==="idle"||s.status==="lobby") {
-      stopQTimer();
-      showQState("idle");
-      document.getElementById("rQuizTabContent").innerHTML = '<div class="empty-msg">Quiz coming up!</div>';
-      return;
-    }
-
-    if (s.status==="running" && s.currentQuestionId) {
-      const durationMs = (s.durationSec||15)*1000;
-      startQTimer(s.questionStartedAtMs||Date.now(), durationMs);
-      document.getElementById("qBatchLabel").textContent = "QUESTION " + (s.batchNumber||1);
-
-      // Load question
-      try {
-        const qSnap = await getDoc(doc(db,"quiz_questions",s.currentQuestionId));
-        if (!qSnap.exists()) return;
-        const q = qSnap.data();
-        document.getElementById("qText").textContent = q.text;
-        const optsEl = document.getElementById("qOptions");
-        const alreadyAnswered = answeredQId === s.currentQuestionId;
-        if (!alreadyAnswered) {
-          myAnswerIdx = null;
-          document.getElementById("qLockedMsg").style.display = "none";
-          optsEl.innerHTML = "";
-          (q.options||[]).forEach((opt,idx) => {
-            const b = document.createElement("button");
-            b.className = "quiz-opt"; b.textContent = opt;
-            b.addEventListener("click", () => submitQAnswer(s.currentQuestionId, idx, s.questionStartedAtMs||Date.now(), q.correctIndex));
-            optsEl.appendChild(b);
-          });
-        }
-      } catch(e){}
-      showQState("running");
-      updateQuizLeaderboard();
-      return;
-    }
-
-    if (s.status==="question_ended") {
-      stopQTimer();
-      // Show result
-      let emoji = "⏱", msg = "Time's up", detail = "";
-      if (myAnswerIdx !== null && answeredQId === s.currentQuestionId) {
-        try {
-          const qSnap = await getDoc(doc(db,"quiz_questions",s.currentQuestionId));
-          if (qSnap.exists()) {
-            const correct = Number(myAnswerIdx) === Number(qSnap.data().correctIndex);
-            emoji = correct ? "✅" : "❌";
-            msg   = correct ? "Correct!" : "Not quite";
-          }
-        } catch(e){}
-      }
-      if (s.lastResult?.fastestName) {
-        const qKey = "qf_"+s.batchNumber;
-        if (!announcedQs.has(qKey)) {
-          announcedQs.add(qKey);
-          addAnn(qKey,"teal","⚡ Q"+s.batchNumber+" Fastest",s.lastResult.fastestName,
-            ((s.lastResult.fastestTimeMs||0)/1000).toFixed(1)+"s");
-        }
-        detail = "⚡ Fastest: "+s.lastResult.fastestName;
-      }
-      document.getElementById("qResultEmoji").textContent = emoji;
-      document.getElementById("qResultMsg").textContent   = msg;
-      document.getElementById("qResultDetail").textContent = detail;
-      showQState("ended");
-      updateQuizLeaderboard();
-      return;
-    }
-
-    if (s.status==="finished") {
-      stopQTimer();
-      // Final leaderboard in quiz section
-      try {
-        const snap = await getDocs(query(collection(db,"quiz_participants"),orderBy("totalScore","desc"),limit(10)));
-        document.getElementById("qFinalLeaderboard").innerHTML = [...snap.docs].map((d,i)=>{
-          const p=d.data(); const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"#"+(i+1);
-          return `<div class="lb-row"><div class="lb-rank ${i<3?'top':''}">${medal}</div><div class="lb-name">${esc(p.name||"—")}${d.id===attendeeId?" (you)":""}</div><div class="lb-pts">${p.totalScore||0} pts</div></div>`;
-        }).join("");
-        // Announce winner
-        if (!snap.empty) {
-          const w=snap.docs[0].data();
-          addAnn("quiz_final_winner","teal","🏆 Quiz Night Winner",w.name,"Score: "+(w.totalScore||0)+" pts");
-        }
-      } catch(e){}
-      showQState("finished");
-      updateQuizLeaderboard();
-    }
-  }, ()=>{});
-
-  async function submitQAnswer(questionId, selectedIndex, startedAtMs, correctIndex) {
-    if (answeredQId===questionId) return;
-    answeredQId = questionId;
-    myAnswerIdx = selectedIndex;
-    // Style the buttons
-    document.querySelectorAll(".quiz-opt").forEach((b,i) => {
-      b.disabled = true;
-      if (i===selectedIndex) b.classList.add("selected");
-    });
-    document.getElementById("qLockedMsg").style.display = "block";
-    // Write answer
-    if (!attendeeId) return;
-    try {
-      await setDoc(doc(db,"quiz_answers",questionId+"_"+attendeeId), {
-        questionId, attendeeId, name:myName,
-        selectedIndex: Number(selectedIndex),
-        answeredAtClientMs: Date.now(),
-        clientTimeTakenMs: Date.now()-startedAtMs,
-        answeredAtServer: serverTimestamp()
-      });
-    } catch(e){ console.error("answer submit:", e); }
-  }
-
-  // ── Karaoke Night section ──
-  let currentPairId = null;
-  let votingEnabled = true;
-
-  function showKState(state) {
-    ["waiting","performing","voting","voted","results"].forEach(s => {
-      const el = document.getElementById("kState-"+s);
-      if (el) el.style.display = s===state?"block":"none";
-    });
-  }
-
-  onSnapshot(doc(db,"state","karaoke"), async snap => {
-    if (!snap.exists()) { showKState("waiting"); return; }
-    const s = snap.data();
-
-    if (s.phase==="lobby" || !s.currentPairId) {
-      showKState("waiting"); return;
-    }
-
-    if (s.phase==="performing" && s.currentPairId) {
-      // Get pair info
-      let pair;
-      try {
-        const pSnap = await getDoc(doc(db,"karaoke_pairs",s.currentPairId));
-        if (!pSnap.exists()) return;
-        pair = pSnap.data();
-      } catch(e) { return; }
-
-      const isPerformer = attendeeId && (pair.maleId===attendeeId || pair.femaleId===attendeeId);
-
-      if (isPerformer) {
-        document.getElementById("kOnStagePair").textContent = pair.maleName+" & "+pair.femaleName;
-        document.getElementById("kOnStageSong").textContent = pair.song||"";
-        showKState("performing"); return;
-      }
-
-      // Audience: check if already voted for THIS pair
-      if (currentPairId !== s.currentPairId) {
-        currentPairId = s.currentPairId;
-        votingEnabled = true;
-      }
-      if (votingEnabled && attendeeId) {
-        try {
-          const vSnap = await getDoc(doc(db,"karaoke_votes",s.currentPairId+"_"+attendeeId));
-          if (vSnap.exists()) { showKState("voted"); return; }
-        } catch(e){}
-      }
-      document.getElementById("kVotePair").textContent = pair.maleName+" & "+pair.femaleName;
-      document.getElementById("kVoteSong").textContent = pair.song||"";
-      showKState("voting"); return;
-    }
-
-    if (s.phase==="results" && s.currentPairId) {
-      // Show last pair score
-      try {
-        const pSnap = await getDoc(doc(db,"karaoke_pairs",s.currentPairId));
-        if (pSnap.exists()) {
-          const p = pSnap.data();
-          document.getElementById("kResultDetails").innerHTML =
-            `<div class="ann-card pink" style="padding:10px 14px;margin:0;">
-              <div class="ann-title pink">${esc(p.maleName)} &amp; ${esc(p.femaleName)}</div>
-              <div class="ann-sub">Performance: ${(p.avgPerformance||0).toFixed(1)} · Singing: ${(p.avgSinging||0).toFixed(1)} · Total: ${(p.totalScore||0).toFixed(1)}</div>
-             </div>`;
-          addAnn("karaoke_result_"+s.currentPairId,"pink","🎤 Pair Scored",
-            p.maleName+" & "+p.femaleName,"Total: "+(p.totalScore||0).toFixed(1));
-        }
-      } catch(e){}
-      showKState("results"); return;
-    }
-
-    if (s.phase==="final") {
-      showKState("waiting");
-    }
-  }, ()=>{});
-
-  // Vote sliders
-  ["votePerf","voteSing"].forEach(id => {
-    const el = document.getElementById(id);
-    const valEl = document.getElementById(id+"Val");
-    if (el) el.addEventListener("input", () => { if(valEl) valEl.textContent = el.value; });
-  });
-
-  document.getElementById("submitVoteBtn")?.addEventListener("click", async () => {
-    if (!currentPairId||!attendeeId) return;
-    const perf = Number(document.getElementById("votePerf").value);
-    const sing = Number(document.getElementById("voteSing").value);
-    try {
-      await setDoc(doc(db,"karaoke_votes",currentPairId+"_"+attendeeId), {
-        pairId:currentPairId, voterId:attendeeId,
-        performance:perf, singing:sing, votedAt:serverTimestamp()
-      });
-      votingEnabled = false;
-      showKState("voted");
-      toast("Vote submitted! ⭐");
-    } catch(e){ toast("Couldn't submit — try again."); }
-  });
-
-  // Update leaderboard every 20s
-  setInterval(updateQuizLeaderboard, 20_000);
 }
 
-// ── Init ──
-(async function init() {
-  try {
+// Init
+(async function init(){
+  try{
     await ensureAuth();
-    if (currentAttendeeId) {
-      const snap = await getDoc(doc(db,"attendees",currentAttendeeId));
-      if (snap.exists()) {
-        currentName = snap.data().name;
-        await loadPass(currentAttendeeId, snap.data());
-        return;
-      }
+    if(attendeeId){
+      const snap=await getDoc(doc(db,"attendees",attendeeId));
+      if(snap.exists()){myName=snap.data().name;await loadPass(attendeeId,snap.data());return;}
     }
     showStep("step-form");
-  } catch(e) { console.error(e); showStep("step-form"); }
+  }catch(e){console.error(e);showStep("step-form");}
 })();
 </script>
 </body>
