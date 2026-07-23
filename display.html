@@ -620,42 +620,37 @@ function stopCongratsListener() {
 }
 
 function spawnCloudMessage(fromName) {
-  const area = document.getElementById("congratsFloatArea");
-  const phrase = CONGRATS_PHRASES[Math.floor(Math.random() * CONGRATS_PHRASES.length)];
-  const emoji  = CONGRATS_EMOJIS[Math.floor(Math.random() * CONGRATS_EMOJIS.length)];
-  const color  = CLOUD_COLORS[Math.floor(Math.random() * CLOUD_COLORS.length)];
-  const size   = (1.3 + Math.random() * 2.0).toFixed(2);
-  const rot    = (Math.random() * 28 - 14).toFixed(1);
-  const dur    = (5 + Math.random() * 4).toFixed(1);
-  const delay  = (Math.random() * .8).toFixed(2);
-
-  const variants = fromName ? [
-    `${emoji} ${phrase} — ${fromName}`,
-    `${fromName}: ${phrase} ${emoji}`,
-    `${emoji} ${fromName} celebrates! ${emoji}`,
-    `${phrase} from ${fromName} ${emoji}`,
-    `${emoji} ${fromName} says Congrats!`,
-  ] : [
-    `${emoji} ${phrase}`,
-    `${phrase} ${emoji}`,
-    `${emoji}${emoji} ${phrase} ${emoji}${emoji}`,
+  if (!fromName) return;
+  var area  = document.getElementById("congratsFloatArea");
+  var emoji = CONGRATS_EMOJIS[Math.floor(Math.random() * CONGRATS_EMOJIS.length)];
+  var color = CLOUD_COLORS[Math.floor(Math.random() * CLOUD_COLORS.length)];
+  var size  = (1.6 + Math.random() * 1.8).toFixed(2);
+  var rot   = (Math.random() * 20 - 10).toFixed(1);
+  var dur   = (5.5 + Math.random() * 4).toFixed(1);
+  var delay = (Math.random() * 0.5).toFixed(2);
+  var msgs  = [
+    emoji + " " + fromName + " says Congratulations!",
+    fromName + ": Well done! " + emoji,
+    emoji + " Congrats from " + fromName + "!",
+    fromName + " is celebrating! " + emoji,
+    emoji + " " + fromName + ": You deserved it!",
+    "Amazing! — " + fromName + " " + emoji,
+    fromName + " says: So proud! " + emoji,
+    emoji + " " + fromName + " cheers for you!"
   ];
-  const text = variants[Math.floor(Math.random() * variants.length)];
-
-  const el = document.createElement("div");
+  var text = msgs[Math.floor(Math.random() * msgs.length)];
+  var el = document.createElement("div");
   el.className = "cloud-item";
   el.textContent = text;
-  el.style.cssText = `
-    font-size:${size}vw; color:${color};
-    left:${(Math.random() * 72).toFixed(1)}%;
-    bottom:${(-4 + Math.random()*8).toFixed(1)}vh;
-    --r:${rot}deg;
-    animation-duration:${dur}s;
-    animation-delay:${delay}s;
-    text-shadow: 0 0 1.5vw ${color}88;
-  `;
+  el.style.cssText = "font-size:" + size + "vw;color:" + color
+    + ";left:" + (2 + Math.random()*68).toFixed(1) + "%"
+    + ";bottom:" + (-2 + Math.random()*6).toFixed(1) + "vh"
+    + ";--r:" + rot + "deg"
+    + ";animation-duration:" + dur + "s"
+    + ";animation-delay:" + delay + "s"
+    + ";text-shadow:0 0 2vw " + color + "99,0 0 .5vw rgba(0,0,0,.8);";
   area.appendChild(el);
-  setTimeout(() => el.remove(), (parseFloat(dur) + parseFloat(delay) + 1) * 1000);
+  setTimeout(function(){ el.remove(); }, (parseFloat(dur) + parseFloat(delay) + 1.5) * 1000);
 }
 
 function spawnEmojiBurst() {
@@ -712,86 +707,91 @@ function renderAwards(s) {
   const wPhotoWrap = document.getElementById("awardsWinnerPhotoWrap");
   const finalListEl= document.getElementById("awardsFinalList");
 
-  // Reset every render
-  [teaserEl, photoWrap, wPhotoWrap, finalListEl,
-   document.getElementById("awardWinnerName"),
-   document.getElementById("awardWinnerDept"),
-   document.getElementById("awardWinnerVotes")
-  ].forEach(e => e && (e.style.display = "none"));
-  categoryEl.style.display = "";
-
-  /* ── IDLE ── */
+  /* IDLE */
   if (!s.status || s.status === "idle") {
     stopNomineePhotoShuffle(); stopCongratsListener();
+    [teaserEl, photoWrap, wPhotoWrap, finalListEl].forEach(e => e && (e.style.display="none"));
     eyebrow.textContent = "STAFF AWARDS";
     categoryEl.textContent = "Award ceremony coming up";
+    categoryEl.style.display = "";
     return;
   }
 
-  /* ── CATEGORY (shuffle nominees) ── */
+  /* CATEGORY - shuffle nominees */
   if (s.status === "category") {
     stopCongratsListener();
-    eyebrow.textContent = total ? `STAFF AWARDS · ${idx+1} OF ${total}` : "STAFF AWARDS";
-    categoryEl.textContent = "Loading…";
-    teaserEl.style.display = "";
+    [wPhotoWrap, finalListEl].forEach(e => e && (e.style.display="none"));
+    categoryEl.style.display = "";
+    teaserEl.style.display   = "";
+    eyebrow.textContent = total ? ("STAFF AWARDS - " + (idx+1) + " OF " + total) : "STAFF AWARDS";
 
-    if (awardsCurrentCatId !== catId) {
-      awardsCurrentCatId = catId;
-      if (catId) {
-        getDoc(doc(db, "award_cats", catId)).then(snap => {
-          if (!snap.exists()) { categoryEl.textContent = "—"; return; }
-          const cat = snap.data();
-          categoryEl.textContent = cat.name || "—";
-          startNomineePhotoShuffle(cat.nominees || []);
-        }).catch(e => { categoryEl.textContent = "Error"; console.error("award_cats fetch:", e); });
-      }
+    // FIX: if same category and shuffle is running, just keep the photo wrap visible.
+    // Without this fix, every renderAwards call hides photoWrap even while shuffle runs.
+    if (awardsCurrentCatId === catId && awardsShuffleInterval) {
+      photoWrap.style.display = "flex";
+      return;
+    }
+
+    // New category - fetch nominees and start fresh shuffle
+    awardsCurrentCatId = catId;
+    stopNomineePhotoShuffle();
+    categoryEl.textContent  = "Loading...";
+    photoWrap.style.display = "none";
+
+    if (catId) {
+      getDoc(doc(db, "award_cats", catId)).then(function(snap) {
+        if (!snap.exists()) { categoryEl.textContent = "-"; return; }
+        var cat = snap.data();
+        categoryEl.textContent = cat.name || "-";
+        startNomineePhotoShuffle(cat.nominees || []);
+      }).catch(function(e) { categoryEl.textContent = "-"; console.error("category fetch:", e); });
     }
     return;
   }
 
-  /* ── REVEALED (show winner + congrats cloud) ── */
+  /* REVEALED - winner + congrats cloud */
   if (s.status === "revealed") {
     stopNomineePhotoShuffle();
     awardsCurrentCatId = null;
-    categoryEl.style.display = "none";
-    teaserEl.style.display   = "none";
-    photoWrap.style.display  = "none";
-
+    [categoryEl, teaserEl, photoWrap].forEach(e => e && (e.style.display="none"));
     if (!catId) return;
 
-    // Only run once per reveal (not on every re-render of same state)
-    const isNew = lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx;
+    var isNew = lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx;
     lastAwardsStatus = "revealed";
     lastAwardsIndex  = idx;
 
-    getDoc(doc(db, "award_cats", catId)).then(snap => {
+    // FIX: start congrats listener BEFORE the fetch, not inside .then()
+    // Ensures messages appear even if winner fetch is slow or fails
+    if (isNew) {
+      burstConfetti();
+      setupCongratsListener(catId);
+    }
+
+    getDoc(doc(db, "award_cats", catId)).then(function(snap) {
       if (!snap.exists()) return;
-      const cat     = snap.data();
-      const winners = cat.winners?.length ? cat.winners
-                    : cat.presetWinner    ? [cat.presetWinner]
-                    : [];
-
-      eyebrow.textContent = `🏆  ${cat.name}`;
-
+      var cat     = snap.data();
+      var winners = (cat.winners && cat.winners.length) ? cat.winners
+                  : cat.presetWinner ? [cat.presetWinner]
+                  : [];
+      eyebrow.textContent = "🏆  " + cat.name;
       if (!winners.length) return;
-
       wPhotoWrap.innerHTML = "";
-      winners.forEach(w => {
-        const col = document.createElement("div");
+      winners.forEach(function(w) {
+        var col = document.createElement("div");
         col.style.cssText = "display:flex;flex-direction:column;align-items:center;margin:0 1.5vw;";
         if (w.photoBase64) {
-          const img = document.createElement("img");
-          const sz  = winners.length > 1 ? "16" : "26";
-          img.src   = w.photoBase64;
-          img.style.cssText = `width:${sz}vw;height:${sz}vw;object-fit:cover;border-radius:50%;border:.4vw solid var(--teal);box-shadow:0 0 6vw rgba(54,214,197,.5);animation:photoIn .5s cubic-bezier(.34,1.56,.64,1) both;`;
+          var img = document.createElement("img");
+          var sz  = winners.length > 1 ? "16" : "26";
+          img.src = w.photoBase64;
+          img.style.cssText = "width:"+sz+"vw;height:"+sz+"vw;object-fit:cover;border-radius:50%;border:.4vw solid var(--teal);box-shadow:0 0 6vw rgba(54,214,197,.5);animation:photoIn .5s cubic-bezier(.34,1.56,.64,1) both;";
           col.appendChild(img);
         }
-        const nm = document.createElement("div");
-        nm.style.cssText = `font-family:var(--font-display);font-size:${winners.length>1?"3":"5"}vw;color:var(--teal);margin-top:1vw;text-shadow:0 0 4vw rgba(54,214,197,.5);`;
+        var nm = document.createElement("div");
+        nm.style.cssText = "font-family:var(--font-display);font-size:"+(winners.length>1?"3":"5")+"vw;color:var(--teal);margin-top:1vw;text-shadow:0 0 4vw rgba(54,214,197,.5);";
         nm.textContent = w.name;
         col.appendChild(nm);
         if (w.dept) {
-          const dp = document.createElement("div");
+          var dp = document.createElement("div");
           dp.style.cssText = "font-size:1.5vw;color:var(--text-muted);margin-top:.4vw;";
           dp.textContent = w.dept;
           col.appendChild(dp);
@@ -799,34 +799,35 @@ function renderAwards(s) {
         wPhotoWrap.appendChild(col);
       });
       wPhotoWrap.style.cssText = "display:flex;flex-direction:row;align-items:flex-start;justify-content:center;flex-wrap:wrap;gap:1vw;margin-top:1.5vw;";
-
-      if (isNew) {
-        burstConfetti();
-        setupCongratsListener(catId); // uses award_cats subcollection — no index needed
-      }
-    }).catch(e => console.error("revealed fetch:", e));
+    }).catch(function(e) { console.error("revealed fetch:", e); });
     return;
   }
 
-  /* ── FINISHED ── */
+  /* FINISHED */
   if (s.status === "finished") {
     stopCongratsListener(); stopNomineePhotoShuffle();
+    [teaserEl, photoWrap, wPhotoWrap].forEach(e => e && (e.style.display="none"));
     eyebrow.textContent = "STAFF AWARDS";
     categoryEl.textContent = "Thank You, Everyone!";
+    categoryEl.style.display = "";
     finalListEl.style.display = "";
-    finalListEl.innerHTML = `<li style="justify-content:center;color:var(--text-muted);font-size:1.4vw;border:none;">Loading…</li>`;
-    Promise.all(catIds.map(id => getDoc(doc(db, "award_cats", id)))).then(snaps => {
+    finalListEl.innerHTML = "<li style='justify-content:center;color:var(--text-muted);font-size:1.4vw;border:none;'>Loading...</li>";
+    Promise.all(catIds.map(function(id) {
+      return getDoc(doc(db, "award_cats", id));
+    })).then(function(snaps) {
       finalListEl.innerHTML = "";
-      snaps.filter(s => s.exists()).sort((a,b)=>(a.data().order||0)-(b.data().order||0)).forEach(cs => {
-        const c = cs.data();
-        const winners = c.winners?.length ? c.winners : (c.presetWinner ? [c.presetWinner] : []);
-        if (!winners.length) return;
-        const li = document.createElement("li");
-        li.innerHTML = `${winners[0]?.photoBase64 ? `<img class="a-thumb" src="${winners[0].photoBase64}" alt="">` : ""}
-          <span class="acat">${c.name}</span>
-          <span class="awin">${winners.map(w=>w.name).join(" & ")}</span>`;
-        finalListEl.appendChild(li);
-      });
+      snaps.filter(function(sn){ return sn.exists(); })
+        .sort(function(a,b){ return (a.data().order||0)-(b.data().order||0); })
+        .forEach(function(cs) {
+          var c = cs.data();
+          var winners = (c.winners && c.winners.length) ? c.winners : (c.presetWinner ? [c.presetWinner] : []);
+          if (!winners.length) return;
+          var li = document.createElement("li");
+          li.innerHTML = (winners[0] && winners[0].photoBase64 ? "<img class='a-thumb' src='"+winners[0].photoBase64+"' alt=''>" : "")
+            + "<span class='acat'>" + c.name + "</span>"
+            + "<span class='awin'>" + winners.map(function(w){return w.name;}).join(" & ") + "</span>";
+          finalListEl.appendChild(li);
+        });
     });
     if (lastAwardsStatus !== "finished") burstConfetti();
     lastAwardsStatus = "finished";
