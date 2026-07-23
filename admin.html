@@ -130,6 +130,10 @@
     <input type="password" id="pinInput" placeholder="Passcode" autocomplete="off" />
     <button class="btn btn-gold btn-block" id="pinSubmit" style="margin-top: 12px;">Enter</button>
     <p class="muted" id="pinError" style="font-size: 13px; margin-top: 10px; min-height: 1px;"></p>
+    <p class="muted" id="pinHint" style="font-size: 12px; margin-top: 8px; display:none;">
+      Passcode is set in <code>firebase-config.js</code> as <code>window.ADMIN_PASSCODE</code>.
+      If blank, try submitting with an empty field.
+    </p>
   </div>
 </div>
 
@@ -525,13 +529,22 @@ async function ensureAuth() {
 /* ===================== PIN gate ===================== */
 function tryPin() {
   const val = document.getElementById("pinInput").value;
-  if (val === (window.ADMIN_PASSCODE || "")) {
+  const expected = window.ADMIN_PASSCODE;
+  // If ADMIN_PASSCODE is not configured, warn clearly instead of silently failing
+  if (expected === undefined || expected === null) {
+    document.getElementById("pinError").textContent = "ADMIN_PASSCODE is not set in firebase-config.js — open that file and add: window.ADMIN_PASSCODE = \"yourpassword\";";
+    document.getElementById("pinHint").style.display = "block";
+    return;
+  }
+  if (val === expected) {
     sessionStorage.setItem("adminAuthed", "1");
     document.getElementById("pinGate").style.display = "none";
     document.getElementById("app").style.display = "block";
     boot();
   } else {
     document.getElementById("pinError").textContent = "Wrong passcode — try again.";
+    document.getElementById("pinHint").style.display = "block";
+    document.getElementById("pinInput").select();
   }
 }
 document.getElementById("pinSubmit").addEventListener("click", tryPin);
