@@ -2156,13 +2156,7 @@ function renderPresentationBoard() {
       const idx   = Number(btn.dataset.abIdx);
       btn.disabled = true; btn.textContent = "Opening…";
       try {
-        // setDoc (not updateDoc) so categoryIds is always present for the display page
-        await setDoc(doc(db, "state", "awards"), {
-          status: "category",
-          currentIndex: idx,
-          categoryIds: boardCatIds,
-          totalCategories: boardCatIds.length
-        });
+        await updateDoc(doc(db, "state", "awards"), { status: "category", currentIndex: idx });
         await setDisplayMode("awards");
         toast("Presenting: " + (manualAwards.find(a=>a.id===catId)?.name || catId));
       } catch(e) { toast("Error: " + e.message); btn.disabled = false; btn.textContent = "▶ Present on display"; }
@@ -2192,12 +2186,7 @@ function renderPresentationBoard() {
       btn.disabled = true; btn.textContent = "Revealing…";
       try {
         await updateDoc(doc(db, "award_cats", catId), { winners, revealed: true });
-        await setDoc(doc(db, "state", "awards"), {
-          status: "revealed",
-          currentIndex: idx,
-          categoryIds: boardCatIds,
-          totalCategories: boardCatIds.length
-        });
+        await updateDoc(doc(db, "state", "awards"), { status: "revealed" });
         // Update local state
         const ai = manualAwards.findIndex(a => a.id === catId);
         if (ai >= 0) { manualAwards[ai].winners = winners; manualAwards[ai].revealed = true; saveAwards(); }
@@ -2210,12 +2199,7 @@ function renderPresentationBoard() {
   // ── Back button (unshow) ──
   board.querySelectorAll("[data-ab-unshow]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      await setDoc(doc(db,"state","awards"), {
-        status: "idle",
-        currentIndex: 0,
-        categoryIds: boardCatIds,
-        totalCategories: boardCatIds.length
-      });
+      await setDoc(doc(db,"state","awards"),{status:"idle"});
       await setDisplayMode("idle");
       boardCurrent=null; boardStatus="idle";
       renderPresentationBoard();
