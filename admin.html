@@ -490,9 +490,22 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
 
 document.getElementById("topEventName").textContent = window.EVENT_NAME || "Event Control Room";
 
-const app = initializeApp(window.FIREBASE_CONFIG);
-const db = getFirestore(app);
-const auth = getAuth(app);
+// Firebase initialized lazily inside boot() so a bad config doesn't crash the PIN gate
+let app, db, auth;
+function initFirebase() {
+  if (app) return; // already done
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.apiKey || cfg.apiKey.startsWith("PASTE")) {
+    throw new Error(
+      "firebase-config.js not configured. Open that file in your GitHub repo and replace " +
+      "all PASTE_YOUR_* values with your real Firebase project values from " +
+      "Firebase console → Project settings → Your apps → Web app → Config."
+    );
+  }
+  app  = initializeApp(cfg);
+  db   = getFirestore(app);
+  auth = getAuth(app);
+}
 
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -546,11 +559,16 @@ function tryPin() {
 document.getElementById("pinSubmit").addEventListener("click", tryPin);
 document.getElementById("pinInput").addEventListener("keydown", e => { if (e.key === "Enter") tryPin(); });
 // Auto-bypass: if no passcode configured OR already authenticated this session
-if (!window.ADMIN_PASSCODE || sessionStorage.getItem("adminAuthed") === "1") {
-  document.getElementById("pinGate").style.display = "none";
-  document.getElementById("app").style.display = "block";
-  boot();
-}
+// This runs even if firebase-config.js is broken — PIN gate is independent of Firebase
+(function() {
+  const noPass = !window.ADMIN_PASSCODE || window.ADMIN_PASSCODE.trim() === "";
+  const alreadyIn = sessionStorage.getItem("adminAuthed") === "1";
+  if (noPass || alreadyIn) {
+    document.getElementById("pinGate").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    boot();
+  }
+})();
 
 /* ===================== Tabs ===================== */
 document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -586,6 +604,7 @@ async function boot() {
   if (booted) return;
   booted = true;
   try {
+    initFirebase(); // safe to call here — PIN gate already passed
     await ensureAuth();
     // Brief pause — ensures the auth token is fully propagated to Firestore
     // before we fire the first getDocs. Without this, the first load can
