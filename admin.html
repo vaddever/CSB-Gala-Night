@@ -528,28 +528,25 @@ async function ensureAuth() {
 
 /* ===================== PIN gate ===================== */
 function tryPin() {
-  const val = document.getElementById("pinInput").value;
-  const expected = window.ADMIN_PASSCODE;
-  // If ADMIN_PASSCODE is not configured, warn clearly instead of silently failing
-  if (expected === undefined || expected === null) {
-    document.getElementById("pinError").textContent = "ADMIN_PASSCODE is not set in firebase-config.js — open that file and add: window.ADMIN_PASSCODE = \"yourpassword\";";
-    document.getElementById("pinHint").style.display = "block";
-    return;
-  }
-  if (val === expected) {
+  const val      = document.getElementById("pinInput").value.trim();
+  const expected = (window.ADMIN_PASSCODE || "").trim();
+  // If no passcode is configured, any input (including empty) lets you in
+  if (!expected || val === expected) {
     sessionStorage.setItem("adminAuthed", "1");
     document.getElementById("pinGate").style.display = "none";
     document.getElementById("app").style.display = "block";
     boot();
   } else {
-    document.getElementById("pinError").textContent = "Wrong passcode — try again.";
+    const errEl = document.getElementById("pinError");
+    errEl.textContent = "Wrong passcode. Check window.ADMIN_PASSCODE in firebase-config.js";
     document.getElementById("pinHint").style.display = "block";
     document.getElementById("pinInput").select();
   }
 }
 document.getElementById("pinSubmit").addEventListener("click", tryPin);
 document.getElementById("pinInput").addEventListener("keydown", e => { if (e.key === "Enter") tryPin(); });
-if (sessionStorage.getItem("adminAuthed") === "1") {
+// Auto-bypass: if no passcode configured OR already authenticated this session
+if (!window.ADMIN_PASSCODE || sessionStorage.getItem("adminAuthed") === "1") {
   document.getElementById("pinGate").style.display = "none";
   document.getElementById("app").style.display = "block";
   boot();
