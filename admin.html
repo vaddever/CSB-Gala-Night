@@ -9,7 +9,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="firebase-config.js"></script>
 <style>
-  #app { display: block; }
+  #pinGate {
+    position: fixed; inset: 0; background: var(--bg); display: flex;
+    align-items: center; justify-content: center; z-index: 999;
+  }
+  #pinGate .card { max-width: 340px; width: 90%; text-align: center; }
+  #pinGate .display { font-size: 30px; color: var(--gold); margin-bottom: 14px; }
+
+  #app { display: none; }
 
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
@@ -116,7 +123,19 @@
 </head>
 <body>
 
-<!-- pin gate removed -->
+<div id="pinGate">
+  <div class="card">
+    <div class="display">Control Room</div>
+    <p class="muted" style="margin-bottom: 16px;">Enter the event passcode to continue.</p>
+    <input type="password" id="pinInput" placeholder="Passcode" autocomplete="off" />
+    <button class="btn btn-gold btn-block" id="pinSubmit" style="margin-top: 12px;">Enter</button>
+    <p class="muted" id="pinError" style="font-size: 13px; margin-top: 10px; min-height: 1px;"></p>
+    <p class="muted" id="pinHint" style="font-size: 12px; margin-top: 8px; display:none;">
+      Passcode is set in <code>firebase-config.js</code> as <code>window.ADMIN_PASSCODE</code>.
+      If blank, try submitting with an empty field.
+    </p>
+  </div>
+</div>
 
 <div id="app">
   <div id="errorBanner" style="display:none; background:var(--red); color:#fff; padding:11px 20px; font-size:13px; position:sticky; top:0; z-index:200; line-height:1.6;"></div>
@@ -450,18 +469,17 @@
 
 <div class="modal-bg" id="qrModal">
   <div class="modal-card">
-    <div class="display" style="color: var(--gold); font-size: 22px;">Entrance URL</div>
-    <p class="muted" style="font-size:13px;">Share this link with staff to check in.</p>
-    <div style="background:var(--surface-2); border-radius:10px; padding:14px; margin:16px 0; word-break:break-all;">
-      <p class="mono" id="entranceUrl" style="font-size:13px; color:var(--teal); margin:0;"></p>
-    </div>
-    <button class="btn btn-teal btn-block" id="copyUrlBtn" style="margin-bottom:8px;">Copy link</button>
-    <button class="btn btn-ghost btn-block" id="closeQrModal">Close</button>
+    <div class="display" style="color: var(--gold); font-size: 22px;">Entrance Pass</div>
+    <p class="muted" style="font-size:13px;">Print this or display it at the door.</p>
+    <div class="qr-wrap"><div id="entranceQr"></div></div>
+    <p class="mono muted" id="entranceUrl" style="font-size:12px; word-break: break-all;"></p>
+    <button class="btn btn-ghost btn-block" id="closeQrModal" style="margin-top:10px;">Close</button>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
@@ -472,22 +490,9 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
 
 document.getElementById("topEventName").textContent = window.EVENT_NAME || "Event Control Room";
 
-// Firebase initialized lazily inside boot() so a bad config doesn't crash the PIN gate
-let app, db, auth;
-function initFirebase() {
-  if (app) return; // already done
-  const cfg = window.FIREBASE_CONFIG;
-  if (!cfg || !cfg.apiKey || cfg.apiKey.startsWith("PASTE")) {
-    throw new Error(
-      "firebase-config.js not configured. Open that file in your GitHub repo and replace " +
-      "all PASTE_YOUR_* values with your real Firebase project values from " +
-      "Firebase console → Project settings → Your apps → Web app → Config."
-    );
-  }
-  app  = initializeApp(cfg);
-  db   = getFirestore(app);
-  auth = getAuth(app);
-}
+const app = initializeApp(window.FIREBASE_CONFIG);
+const db = getFirestore(app);
+const auth = getAuth(app);
 
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -521,8 +526,31 @@ async function ensureAuth() {
   });
 }
 
-/* ===================== boot directly — no PIN gate ===================== */
-boot();
+/* ===================== PIN gate ===================== */
+function tryPin() {
+  const val      = document.getElementById("pinInput").value.trim();
+  const expected = (window.ADMIN_PASSCODE || "").trim();
+  // If no passcode is configured, any input (including empty) lets you in
+  if (!expected || val === expected) {
+    sessionStorage.setItem("adminAuthed", "1");
+    document.getElementById("pinGate").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    boot();
+  } else {
+    const errEl = document.getElementById("pinError");
+    errEl.textContent = "Wrong passcode. Check window.ADMIN_PASSCODE in firebase-config.js";
+    document.getElementById("pinHint").style.display = "block";
+    document.getElementById("pinInput").select();
+  }
+}
+document.getElementById("pinSubmit").addEventListener("click", tryPin);
+document.getElementById("pinInput").addEventListener("keydown", e => { if (e.key === "Enter") tryPin(); });
+// Auto-bypass: if no passcode configured OR already authenticated this session
+if (!window.ADMIN_PASSCODE || sessionStorage.getItem("adminAuthed") === "1") {
+  document.getElementById("pinGate").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  boot();
+}
 
 /* ===================== Tabs ===================== */
 document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -543,11 +571,10 @@ document.getElementById("lobbyBtn").addEventListener("click", async () => {
 document.getElementById("showQrBtn").addEventListener("click", () => {
   const url = new URL("register.html", window.location.href).toString();
   document.getElementById("entranceUrl").textContent = url;
+  const el = document.getElementById("entranceQr");
+  el.innerHTML = "";
+  new QRCode(el, { text: url, width: 220, height: 220, colorDark: "#0b0e14", colorLight: "#ffffff" });
   document.getElementById("qrModal").classList.add("show");
-});
-document.getElementById("copyUrlBtn").addEventListener("click", () => {
-  const url = document.getElementById("entranceUrl").textContent;
-  navigator.clipboard.writeText(url).then(() => toast("Link copied!")).catch(() => toast(url));
 });
 document.getElementById("closeQrModal").addEventListener("click", () => {
   document.getElementById("qrModal").classList.remove("show");
@@ -559,7 +586,6 @@ async function boot() {
   if (booted) return;
   booted = true;
   try {
-    initFirebase(); // safe to call here — PIN gate already passed
     await ensureAuth();
     // Brief pause — ensures the auth token is fully propagated to Firestore
     // before we fire the first getDocs. Without this, the first load can
