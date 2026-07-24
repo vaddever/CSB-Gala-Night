@@ -10,5 +10,5 @@ window.FIREBASE_CONFIG = {
 };
 
 
-window.ADMIN_PASSCODE = "qwerty2296";
+window.ADMIN_PASSCODE = "qwerty";
 window.EVENT_NAME = "CSB Gala Night 2026";
