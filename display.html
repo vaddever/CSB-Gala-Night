@@ -726,148 +726,208 @@ function stopNomineePhotoShuffle() {
 function renderAwards(s) {
   showScreen("scr-awards");
 
-  const catIds  = s.categoryIds || [];
-  const total   = s.totalCategories || catIds.length;
-  const idx     = s.currentIndex || 0;
-  const catId   = catIds[idx] || null;
+  const catIds = s.categoryIds || [];
+  const total  = s.totalCategories || catIds.length;
+  const idx    = s.currentIndex    || 0;
+  const catId  = catIds[idx]       || null;
 
-  const eyebrow    = document.getElementById("awardsEyebrow");
-  const categoryEl = document.getElementById("awardCategory");
-  const teaserEl   = document.getElementById("awardTeaser");
-  const photoWrap  = document.getElementById("awardsPhotoWrap");
-  const wPhotoWrap = document.getElementById("awardsWinnerPhotoWrap");
-  const finalListEl= document.getElementById("awardsFinalList");
+  const eyebrow     = document.getElementById("awardsEyebrow");
+  const categoryEl  = document.getElementById("awardCategory");
+  const teaserEl    = document.getElementById("awardTeaser");
+  const photoWrap   = document.getElementById("awardsPhotoWrap");
+  const wPhotoWrap  = document.getElementById("awardsWinnerPhotoWrap");
+  const finalListEl = document.getElementById("awardsFinalList");
 
-  /* IDLE */
+  /* ─── IDLE ─── */
   if (!s.status || s.status === "idle") {
     stopNomineePhotoShuffle(); stopCongratsListener();
-    [teaserEl, photoWrap, wPhotoWrap, finalListEl].forEach(e => e && (e.style.display="none"));
+    photoWrap.style.display   = "none";
+    wPhotoWrap.innerHTML      = "";          // clear previous winner
+    wPhotoWrap.style.display  = "none";
+    finalListEl.style.display = "none";
+    teaserEl.style.display    = "none";
     eyebrow.textContent = "STAFF AWARDS";
     categoryEl.textContent = "Award ceremony coming up";
     categoryEl.style.display = "";
     return;
   }
 
-  /* CATEGORY - shuffle nominees */
+  /* ─── CATEGORY — nominees shuffling ─── */
   if (s.status === "category") {
     stopCongratsListener();
-    [wPhotoWrap, finalListEl].forEach(e => e && (e.style.display="none"));
-    categoryEl.style.display = "";
-    teaserEl.style.display   = "";
-    eyebrow.textContent = total ? ("STAFF AWARDS - " + (idx+1) + " OF " + total) : "STAFF AWARDS";
+    // Always clear & hide winner area when entering category
+    wPhotoWrap.innerHTML      = "";
+    wPhotoWrap.style.display  = "none";
+    finalListEl.style.display = "none";
+    teaserEl.style.display    = "";
+    categoryEl.style.display  = "";
+    eyebrow.textContent = total
+      ? ("STAFF AWARDS   " + (idx + 1) + " / " + total)
+      : "STAFF AWARDS";
 
-    // FIX: if same category and shuffle is running, just keep the photo wrap visible.
-    // Without this fix, every renderAwards call hides photoWrap even while shuffle runs.
+    if (!catId) {
+      categoryEl.textContent = "No category data. Push awards in admin panel first.";
+      photoWrap.style.display = "none";
+      return;
+    }
+
+    // Same category & shuffle already running — just keep wrap visible
     if (awardsCurrentCatId === catId && awardsShuffleInterval) {
       photoWrap.style.display = "flex";
       return;
     }
 
-    // New category - fetch nominees and start fresh shuffle
-    awardsCurrentCatId = catId;
+    // New category — fetch nominees and start shuffle
+    awardsCurrentCatId      = catId;
     stopNomineePhotoShuffle();
     categoryEl.textContent  = "Loading...";
     photoWrap.style.display = "none";
 
-    if (catId) {
-      getDoc(doc(db, "award_cats", catId)).then(function(snap) {
-        if (!snap.exists()) { categoryEl.textContent = "-"; return; }
-        var cat = snap.data();
-        categoryEl.textContent = cat.name || "-";
+    getDoc(doc(db, "award_cats", catId))
+      .then(snap => {
+        if (!snap.exists()) {
+          categoryEl.textContent = "Category not found — re-push awards in admin.";
+          return;
+        }
+        const cat = snap.data();
+        categoryEl.textContent = cat.name || "—";
         startNomineePhotoShuffle(cat.nominees || []);
-      }).catch(function(e) { categoryEl.textContent = "-"; console.error("category fetch:", e); });
-    }
+      })
+      .catch(err => {
+        categoryEl.textContent = "Error loading category.";
+        console.error("award_cats fetch:", err.code, err.message);
+      });
     return;
   }
 
-  /* REVEALED - winner + congrats cloud */
+  /* ─── REVEALED — winner + congrats cloud ─── */
   if (s.status === "revealed") {
     stopNomineePhotoShuffle();
-    awardsCurrentCatId = null;
-    [categoryEl, teaserEl, photoWrap].forEach(e => e && (e.style.display="none"));
-    if (!catId) return;
+    awardsCurrentCatId       = null;
+    photoWrap.style.display  = "none";
+    teaserEl.style.display   = "none";
+    categoryEl.style.display = "none";
 
-    var isNew = lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx;
+    if (!catId) {
+      // categoryIds missing from Firestore — show generic message
+      eyebrow.textContent = "STAFF AWARDS";
+      categoryEl.textContent = "Winner announced!";
+      categoryEl.style.display = "";
+      return;
+    }
+
+    const isNew = lastAwardsStatus !== "revealed" || lastAwardsIndex !== idx;
     lastAwardsStatus = "revealed";
     lastAwardsIndex  = idx;
 
-    // FIX: start congrats listener BEFORE the fetch, not inside .then()
-    // Ensures messages appear even if winner fetch is slow or fails
+    // Start confetti + congrats listener IMMEDIATELY — before the fetch
     if (isNew) {
       burstConfetti();
       setupCongratsListener(catId);
     }
 
-    getDoc(doc(db, "award_cats", catId)).then(function(snap) {
-      if (!snap.exists()) return;
-      var cat     = snap.data();
-      var winners = (cat.winners && cat.winners.length) ? cat.winners
-                  : cat.presetWinner ? [cat.presetWinner]
-                  : [];
-      eyebrow.textContent = "🏆  " + cat.name;
-      if (!winners.length) {
-        // No winner selected yet — show category name and wait
-        categoryEl.textContent = cat.name;
-        categoryEl.style.display = "";
-        return;
-      }
-      wPhotoWrap.innerHTML = "";
-      var hasPhoto = winners.some(function(w){ return w.photoBase64; });
-      winners.forEach(function(w) {
-        var col = document.createElement("div");
-        col.style.cssText = "display:flex;flex-direction:column;align-items:center;margin:0 1.5vw;";
-        if (w.photoBase64) {
-          var img = document.createElement("img");
-          var sz  = winners.length > 1 ? "16" : "26";
-          img.src = w.photoBase64;
-          img.style.cssText = "width:"+sz+"vw;height:"+sz+"vw;object-fit:cover;border-radius:50%;border:.4vw solid var(--teal);box-shadow:0 0 6vw rgba(54,214,197,.5);animation:photoIn .5s cubic-bezier(.34,1.56,.64,1) both;";
-          col.appendChild(img);
+    getDoc(doc(db, "award_cats", catId))
+      .then(snap => {
+        if (!snap.exists()) {
+          eyebrow.textContent = "Category data missing";
+          return;
         }
-        var nm = document.createElement("div");
-        // Larger name when no photo
-        var fs = hasPhoto ? (winners.length>1?"3":"5") : "7";
-        nm.style.cssText = "font-family:var(--font-display);font-size:"+fs+"vw;color:var(--teal);margin-top:1vw;text-shadow:0 0 4vw rgba(54,214,197,.5);";
-        nm.textContent = w.name;
-        col.appendChild(nm);
-        if (w.dept) {
-          var dp = document.createElement("div");
-          dp.style.cssText = "font-size:1.5vw;color:var(--text-muted);margin-top:.4vw;";
-          dp.textContent = w.dept;
-          col.appendChild(dp);
+        const cat     = snap.data();
+        const winners = cat.winners && cat.winners.length ? cat.winners
+                      : cat.presetWinner                  ? [cat.presetWinner]
+                      : [];
+
+        eyebrow.textContent = "🏆  " + cat.name;
+
+        if (!winners.length) {
+          // Reveal triggered before winner was selected
+          categoryEl.textContent = cat.name;
+          categoryEl.style.display = "";
+          teaserEl.style.display   = "";
+          return;
         }
-        wPhotoWrap.appendChild(col);
+
+        // Build winner column(s)
+        wPhotoWrap.innerHTML = "";
+        const hasPhoto = winners.some(w => w.photoBase64);
+
+        winners.forEach(w => {
+          const col = document.createElement("div");
+          col.style.cssText = "display:flex;flex-direction:column;align-items:center;margin:0 1.5vw;";
+
+          if (w.photoBase64) {
+            const img = document.createElement("img");
+            const sz  = winners.length > 1 ? "16" : "26";
+            img.src   = w.photoBase64;
+            img.style.cssText = "width:" + sz + "vw;height:" + sz + "vw;"
+              + "object-fit:cover;border-radius:50%;"
+              + "border:.4vw solid var(--teal);"
+              + "box-shadow:0 0 6vw rgba(54,214,197,.5);"
+              + "animation:photoIn .5s cubic-bezier(.34,1.56,.64,1) both;";
+            col.appendChild(img);
+          }
+
+          const nm  = document.createElement("div");
+          const fs  = hasPhoto ? (winners.length > 1 ? "3" : "5") : "7";
+          nm.style.cssText = "font-family:var(--font-display);font-size:" + fs + "vw;"
+            + "color:var(--teal);margin-top:1vw;"
+            + "text-shadow:0 0 4vw rgba(54,214,197,.5);";
+          nm.textContent = w.name;
+          col.appendChild(nm);
+
+          if (w.dept) {
+            const dp = document.createElement("div");
+            dp.style.cssText = "font-size:1.5vw;color:var(--text-muted);margin-top:.4vw;";
+            dp.textContent = w.dept;
+            col.appendChild(dp);
+          }
+          wPhotoWrap.appendChild(col);
+        });
+
+        wPhotoWrap.style.cssText = "display:flex;flex-direction:row;"
+          + "align-items:flex-start;justify-content:center;"
+          + "flex-wrap:wrap;gap:1vw;margin-top:1.5vw;";
+      })
+      .catch(err => {
+        eyebrow.textContent = "Error loading winner.";
+        console.error("winner fetch:", err.code, err.message);
       });
-      wPhotoWrap.style.cssText = "display:flex;flex-direction:row;align-items:flex-start;justify-content:center;flex-wrap:wrap;gap:1vw;margin-top:1.5vw;";
-    }).catch(function(e) { console.error("revealed fetch:", e); });
     return;
   }
 
-  /* FINISHED */
+  /* ─── FINISHED ─── */
   if (s.status === "finished") {
     stopCongratsListener(); stopNomineePhotoShuffle();
-    [teaserEl, photoWrap, wPhotoWrap].forEach(e => e && (e.style.display="none"));
+    photoWrap.style.display  = "none";
+    wPhotoWrap.innerHTML     = "";
+    wPhotoWrap.style.display = "none";
+    teaserEl.style.display   = "none";
     eyebrow.textContent = "STAFF AWARDS";
     categoryEl.textContent = "Thank You, Everyone!";
-    categoryEl.style.display = "";
+    categoryEl.style.display  = "";
     finalListEl.style.display = "";
-    finalListEl.innerHTML = "<li style='justify-content:center;color:var(--text-muted);font-size:1.4vw;border:none;'>Loading...</li>";
-    Promise.all(catIds.map(function(id) {
-      return getDoc(doc(db, "award_cats", id));
-    })).then(function(snaps) {
-      finalListEl.innerHTML = "";
-      snaps.filter(function(sn){ return sn.exists(); })
-        .sort(function(a,b){ return (a.data().order||0)-(b.data().order||0); })
-        .forEach(function(cs) {
-          var c = cs.data();
-          var winners = (c.winners && c.winners.length) ? c.winners : (c.presetWinner ? [c.presetWinner] : []);
-          if (!winners.length) return;
-          var li = document.createElement("li");
-          li.innerHTML = (winners[0] && winners[0].photoBase64 ? "<img class='a-thumb' src='"+winners[0].photoBase64+"' alt=''>" : "")
-            + "<span class='acat'>" + c.name + "</span>"
-            + "<span class='awin'>" + winners.map(function(w){return w.name;}).join(" & ") + "</span>";
-          finalListEl.appendChild(li);
-        });
-    });
+    finalListEl.innerHTML     = "<li style='justify-content:center;color:var(--text-muted);font-size:1.4vw;border:none;'>Loading...</li>";
+
+    Promise.all(catIds.map(id => getDoc(doc(db, "award_cats", id))))
+      .then(snaps => {
+        finalListEl.innerHTML = "";
+        snaps
+          .filter(sn => sn.exists())
+          .sort((a, b) => (a.data().order || 0) - (b.data().order || 0))
+          .forEach(cs => {
+            const c = cs.data();
+            const winners = c.winners && c.winners.length ? c.winners
+                          : c.presetWinner ? [c.presetWinner] : [];
+            if (!winners.length) return;
+            const li = document.createElement("li");
+            li.innerHTML = (winners[0] && winners[0].photoBase64
+              ? "<img class='a-thumb' src='" + winners[0].photoBase64 + "' alt=''>" : "")
+              + "<span class='acat'>" + c.name + "</span>"
+              + "<span class='awin'>" + winners.map(w => w.name).join(" & ") + "</span>";
+            finalListEl.appendChild(li);
+          });
+      });
+
     if (lastAwardsStatus !== "finished") burstConfetti();
     lastAwardsStatus = "finished";
     lastAwardsIndex  = idx;
