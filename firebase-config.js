@@ -6,8 +6,7 @@ window.FIREBASE_CONFIG = {
   projectId: "event-manager-cda51",
   storageBucket: "event-manager-cda51.firebasestorage.app",
   messagingSenderId: "35004972816",
-  appId: "1:35004972816:web:d52b69bfbbb2d6f8ab2f95",
-  measurementId: "G-MQ5KT1BFE1"
+  appId: "1:35004972816:web:d52b69bfbbb2d6f8ab2f95"
 };
 
 
